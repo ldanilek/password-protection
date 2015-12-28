@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include "lzw.h"
 #include "encrypt.h"
+#include <sys/stat.h>
 
 #define INITIAL_NUM_BITS 9
 #define MAX_BITS 20
@@ -134,6 +135,8 @@ void encode(char* inputName, char* outputName)
     FILE* output = fopen(outputName, "w");
     if (!output) SYS_DIE("fopen");
 
+    putBits(1, 1, output);
+
     HashTable table = singleCharacters();
 
     int nextCode = table->count + 1;
@@ -202,7 +205,27 @@ void encode(char* inputName, char* outputName)
 
     freeTable(table);
 
-    STATUS("%s", "Completed Encode");
+    if (fclose(input)) SYS_ERROR("fclose");
+    if (fclose(output)) SYS_ERROR("fclose");
+
+    // if the encoded version is bigger, go with the other
+    struct stat outputStats;
+    if (lstat(outputName, &outputStats)) SYS_DIE("lstat");
+    struct stat inputStats;
+    if (lstat(inputName, &inputStats)) SYS_DIE("lstat");
+    off_t outSize = outputStats.st_size;
+    off_t inSize = inputStats.st_size;
+    if (outSize > inSize)
+    {
+        STATUS("%lld > %lld, so use uncompressed file", outSize, inSize);
+        rename(inputName, outputName);
+    }
+    else
+    {
+        if (remove(inputName)) SYS_ERROR("remove");
+        
+        STATUS("%s", "Completed Encode");
+    }
 }
 
 #define ARRAYPREF(C) (table->elements[(C)-1].PREF)
@@ -212,10 +235,21 @@ void decode(char* inputName, char* outputName)
 {
     STATUS("Beginning decode from %s to %s", inputName, outputName);
 
-    FILE* outFile = fopen(outputName, "w");
-    if (!outFile) SYS_DIE("fopen");
     FILE* inFile = fopen(inputName, "r");
     if (!inFile) SYS_DIE("fopen");
+
+    int compressed;
+    if ((compressed = getBits(1, inFile)) == EOF) DIE("%s", "Corrupt file");
+    if (!compressed)
+    {
+        fclose(inFile);
+        if (rename(inputName, outputName)) SYS_DIE("rename");
+        STATUS("%s is not encoded", inputName);
+        return;
+    }
+
+    FILE* outFile = fopen(outputName, "w");
+    if (!outFile) SYS_DIE("fopen");
 
     Array table;
     HashTable hashTable = singleCharacters();
@@ -312,6 +346,8 @@ void decode(char* inputName, char* outputName)
 
     if (fclose(outFile)) SYS_ERROR("fclose");
     if (fclose(inFile)) SYS_ERROR("fclose");
+
+    if (remove(inputName)) SYS_ERROR("remove");
 
     STATUS("%s", "Completed decode");
 }

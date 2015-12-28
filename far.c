@@ -146,5 +146,7 @@ void extract(char* archiveName)
         }
     }
 
+    if (remove(archiveName)) SYS_ERROR("remove");
+
     STATUS("Extraction from %s complete", archiveName);
 }
