@@ -8,14 +8,14 @@ CFLAGS = -ggdb3 -O0 -Qunused-arguments -std=c11 -Wall -Werror
 EXE = encrypt
 
 # space-separated list of header files
-HDRS = encrypt.h far.h
+HDRS = encrypt.h far.h stringarray.h stringtable.h lzw.h bitcode.h
 
 # space-separated list of libraries, if any,
 # each of which should be prefixed with -l
 LIBS = 
 
 # space-separated list of source files
-SRCS = encrypt.c far.c
+SRCS = encrypt.c far.c bitcode.c stringtable.c stringarray.c lzw.c
 
 # automatically generated list of object files
 OBJS = $(SRCS:.c=.o)

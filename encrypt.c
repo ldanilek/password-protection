@@ -1,5 +1,6 @@
 #include "encrypt.h"
 #include "far.h"
+#include "lzw.h"
 #include <libgen.h>
 #include <ctype.h>
 
@@ -82,17 +83,23 @@ int main(int argc, char** argv)
     char* archiveFar = calloc(archiveNameLen + 5, sizeof(char));
     sprintf(archiveFar, "%s.far", archiveName);
 
+    char* archiveLZW = calloc(archiveNameLen + 5, sizeof(char));
+    sprintf(archiveLZW, "%s.lzw", archiveName);
 
     if (decrypt)
     {
+        decode(archiveLZW, archiveFar);
         extract(archiveFar);
     }
     else
     {
         archive(archiveFar, argc-flagIndex-1, argv+flagIndex+1);
+        encode(archiveFar, archiveLZW);
     }
     
     if (showPassword) free(password);
+    free(archiveFar);
+    free(archiveLZW);
 }
 
 

@@ -16,7 +16,7 @@
  *       By default, prints basic progress report.
  *       Mutually exclusive with -q (last found is used)
  *
- * Flags may be separated or condensed, so -pq and -p -q are both valid
+ * Flags may be separated or condensed, so -pq and -pv -q are both valid
  * 
  * the following filenames must be unused (files will be overwritten),
  * where ArchiveName is the command line argument:
