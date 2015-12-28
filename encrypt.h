@@ -6,8 +6,15 @@
  * Flag descriptions
  * -p    Shows password as it is typed. This allows arbitrarily long passwords.
  *       Default is to use getpass(), which doesn't display password as typed,
- *       but truncates input to length _PASSWORD_LEN (currently 128 characters)
- * -q    Quiet mode. Prints no progress output and only prints fatal errors
+ *       but truncates input to length _PASSWORD_LEN (currently 128 characters).
+ *       With this flag, allows printable characters as determined by isprint().
+ *       Password is terminated by first non-printing character (newline or EOF)
+ *
+ * -q    Quiet mode. Only prints fatal errors.
+ *
+ * -v    Verbose mode. Prints extensive progress report.
+ *       By default, prints basic progress report.
+ *       Mutually exclusive with -q (last found is used)
  *
  * Flags may be separated or condensed, so -pq and -p -q are both valid
  * 
@@ -16,7 +23,8 @@
  * ArchiveName.far
  * ArchiveName.lzw
  * ArchiveName
- * On decrypt, all files to extract will be overwritten
+ * On decrypt, all files to extract will be overwritten,
+ * and ArchiveName is required to exist and be readable
  *
  * ArchiveName may not begin with a hyphen, but it may be any writable path
  * Therefore ./-name is a valid workaround
@@ -39,16 +47,33 @@
  * If portability isn't a problem, you can remove encrypt.c after compiling
  */
 
+#ifndef ENCRYPT_H
+#define ENCRYPT_H
+
+#include <stdbool.h>
+#include <stdio.h>
+
+extern bool quiet;
+extern bool verbose;
+
+#define EXIT_FAILURE 1
+
+// use for major status changes and minor errors
+#define STATUS(format,...) if(!quiet)fprintf(stdout,format "\n",__VA_ARGS__)
+// use for minor progress reports
+#define PROGRESS(format,...) if(verbose)fprintf(stdout,format "\n",__VA_ARGS__)
+
 // Write message to stderr using format FORMAT
 #define WARN(format,...) fprintf (stderr, format "\n", __VA_ARGS__)
 
 // Write message to stderr using format FORMAT and exit.
 #define DIE(format,...)  WARN(format,__VA_ARGS__), exit (EXIT_FAILURE)
 
-#include <stdbool.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-#define _XOPEN_SOURCE
-#include <unistd.h>
+// call after system call fails to print error associated with errno
+#define SYS_ERROR(name) if(!quiet)perror(name)
+// system error followed by return from current function
+#define SYS_ERR_DONE(name) {SYS_ERROR(name);return;}
+// fatal system error
+#define SYS_DIE(name) perror(name),exit(EXIT_FAILURE)
 
+#endif
