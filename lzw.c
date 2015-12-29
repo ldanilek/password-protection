@@ -227,7 +227,7 @@ void encode(char* inputName, char* outputName)
     {
         if (remove(inputName)) SYS_ERROR("remove");
         
-        STATUS("%s", "Completed Encode");
+        STATUS("Encoded %lld bytes into %lld bytes", inSize, outSize);
     }
 }
 

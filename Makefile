@@ -48,9 +48,11 @@ decrypt: $(EXE)
 keys:
 	python keygenerator.py
 
-install: keys encrypt decrypt
+link: encrypt decrypt
 	cp encrypt /usr/local/bin/encrypt
 	cp decrypt /usr/local/bin/decrypt
+
+install: keys link
 	rm -f keys.h
 
 # dependencies 
