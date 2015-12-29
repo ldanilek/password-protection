@@ -25,21 +25,6 @@ void normalize(bigint* num)
     while (num->n > 1 && num->digits[num->n - 1] == 0) num->n--;
 }
 
-bool greaterThan(bigint one, bigint two)
-{
-    // remove trailing zeroes
-    normalize(&one);
-    normalize(&two);
-    if (one.n > two.n) return true;
-    if (one.n < two.n) return false;
-    for (int i = one.n - 1; i >= 0; i--)
-    {
-        if (one.digits[i] > two.digits[i]) return true;
-        if (one.digits[i] < two.digits[i]) return false;
-    }
-    return false;
-}
-
 void appendDigit(bigint* n, unsigned int digit)
 {
     int usize = sizeof(unsigned int);
@@ -48,7 +33,7 @@ void appendDigit(bigint* n, unsigned int digit)
         n->capacity *= 2;
         n->digits = realloc(n->digits, usize*n->capacity);
     }
-    n->digits[n->n-1] = accumulator;
+    n->digits[n->n-1] = digit;
 }
 
 // reads from file one digit at a time until message has > goal digits
@@ -76,132 +61,6 @@ bigint makeMessage(FILE* inFile, int goal, int* totalBytes)
     // fingers crossed that this number is relatively prime to n
     return message;
 }
-
-/*
-// restriction: a > n
-// a = a - b
-void subtract(bigint* a, bigint b)
-{
-    for (int i = 0; i < b.n; i++)
-    {
-        if (a->digits[i] < b.digits[i])
-        {
-            // carry. hopefully the unsigned int arithmetic will just work
-            int j = i+1;
-            while (a->digits[j] == 0) a->digits[j++]--;
-            a->digits[j]--;
-        }
-        a->digits[i] -= b.digits[i];
-    }
-    normalize(a);
-}
-
-// a = a mod n
-void modulo(bigint* a, bigint n)
-{
-    while (greaterThan(*a, n))
-    {
-        subtract(a, n);
-    }
-}
-
-// *a += b * c
-// the overflow gets placed in a+1
-void addProductAndCarry(unsigned int* a, unsigned int b, unsigned int c)
-{
-    bbig total = ((bbig)a)+((bbig)b)*((bbig)c);
-    a[1] = total / BASE;
-    a[0] = total;
-}
-
-// retval = a * b
-bigint multiply(bigint a, bigint b)
-{
-    bigint product;
-    // no matter how much overflow there is,
-    // there can't be more than a.n+b.n digits
-    product.n = a.n + b.n;
-    product.digits = calloc(sizeof(unsigned int), product.n);
-    for (int i = 0; i < a.n; i++)
-    {
-        for (int j = 0; j < b.n; j++)
-        {
-            addProductAndCarry(product.digits+i+j, a.digits[i], b.digits[j]);
-        }
-    }
-    return product;
-}
-
-// performs a modular multiplication, a = a * b mod n
-void multiplyBy(bigint* a, bigint b, bigint n)
-{
-    bigint product = multiply(*a, b);
-    free(a->digits);
-    *a = product;
-    modulo(a, n);
-}*/
-
-/*
-
-// computes b^e mod n
-// input restraints: m > 1 and b < n
-// algorithm from https://en.wikipedia.org/wiki/Modular_exponentiation
-bigint modularExponential(bigint b, unsigned int e, bigint n)
-{
-    bigint result;
-    result.capacity = 1;
-    result.n = 1;
-    result.digits = malloc(sizeof(unsigned int));
-    result.digits[0] = 1;
-    while (e)
-    {
-        if (e & 1)
-        {
-            multiplyBy(&result, b, n);
-        }
-        e >>= 1;
-        // copy base so can square it
-        bigint bCopy;
-        bCopy.n = b.n;
-        bCopy.digits = malloc(b.n * sizeof(unsigned int));
-        for (int i = 0; i < b.n; i++) bCopy.digits[i] = b.digits[i];
-        multiplyBy(&b, bCopy, n);
-        free(bCopy.digits);
-    }
-    return result;
-}
-
-// divides by two via a bitshift
-void shiftRight(bigint* d)
-{
-
-}
-
-bigint bigModularExponential(bigint b, bigint d, bigint n)
-{
-    bigint result;
-    result.capacity = 1;
-    result.n = 1;
-    result.digits = malloc(sizeof(unsigned int));
-    result.digits[0] = 1;
-    normalize(&d);
-    while (d.n > 1 || d.digits[0] > 0)
-    {
-        if (d.digits[0] & 1)
-        {
-            multiplyBy(&result, b, n);
-        }
-        shiftRight(&d);
-        // copy base so can square it
-        bigint bCopy;
-        bCopy.n = b.n;
-        bCopy.digits = malloc(b.n * sizeof(unsigned int));
-        for (int i = 0; i < b.n; i++) bCopy.digits[i] = b.digits[i];
-        multiplyBy(&b, bCopy, n);
-        free(bCopy.digits);
-    }
-    return result;
-}*/
 
 void convertBigint(mpz_t result, bigint a)
 {
