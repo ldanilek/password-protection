@@ -15,7 +15,9 @@ Security of this program is based on the following assumptions:
 
 ## Initial setup
 
-If you can (install GMP)[https://gmplib.org] and openssl (I used the command ```brew install openssl; brew link openssl --force```), please do so. If you cannot, skip to the Compression-only section below.
+If you can (install GMP)[https://gmplib.org] and Openssl (I used the command ```brew install openssl; brew link openssl --force```), please do so. If you cannot, skip to the Compression-only section below.
+
+If you only want to install on one computer, simply run ```make install```. Otherwise, follow these instructions:
 
 1. In the command line, run ```python keygenerator.py```. This will personalize your encryption system by writing random RSA keys to the keys.h file.
 2. Run ```make``` - repeat with the same keys.h on all computers for which you want to encrypt or decrypt.

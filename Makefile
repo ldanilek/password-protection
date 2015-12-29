@@ -45,6 +45,14 @@ decompress: compress
 decrypt: $(EXE)
 	ln -f $(EXE) decrypt
 
+keys:
+	python keygenerator.py
+
+install: keys encrypt decrypt
+	cp encrypt /usr/local/bin/encrypt
+	cp decrypt /usr/local/bin/decrypt
+	rm -f keys.h
+
 # dependencies 
 $(OBJS): $(HDRS) Makefile
 
