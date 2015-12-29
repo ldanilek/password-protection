@@ -15,7 +15,7 @@ Security of this program is based on the following assumptions:
 
 ## Initial setup
 
-If you can (install GMP)[https://gmplib.org] and Openssl (I used the command ```brew install openssl; brew link openssl --force```), please do so. If you cannot, skip to the Compression-only section below.
+If you can [install GMP](https://gmplib.org) and Openssl (I used the command ```brew install openssl; brew link openssl --force```), please do so. If you cannot, skip to the Compression-only section below.
 
 If you only want to install on one computer, simply run ```make install```. Otherwise, follow these instructions:
 
