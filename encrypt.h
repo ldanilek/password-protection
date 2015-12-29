@@ -16,6 +16,10 @@
  *       By default, prints basic progress report.
  *       Mutually exclusive with -q (last found is used)
  *
+ * -r    Remove original. On encrypt, this removes files and directories as it
+ *       archives them. On decrypt, this removes the archive file (if 
+ *       password is correct).
+ *
  * Flags may be separated or condensed, so -pq and -pv -q are both valid
  * 
  * the following filenames must be unused (files will be overwritten),
@@ -55,6 +59,7 @@
 
 extern bool quiet;
 extern bool verbose;
+extern bool removeOriginal;
 
 #define EXIT_FAILURE 1
 

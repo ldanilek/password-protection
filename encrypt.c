@@ -18,6 +18,8 @@
 bool quiet = false;
 // verbose mode
 bool verbose = false;
+// remove original files (listed files on encrypt, archive on decrypt)
+bool removeOriginal = false;
 
 int main(int argc, char** argv)
 {
@@ -45,7 +47,8 @@ int main(int argc, char** argv)
         int flagCount = strlen(flag);
         for (int fIndex = 0; fIndex < flagCount; fIndex++)
         {
-            if (flag[fIndex] == 'q') quiet = true, verbose = false;
+            if (flag[fIndex] == 'r') removeOriginal = true;
+            else if (flag[fIndex] == 'q') quiet = true, verbose = false;
             else if (flag[fIndex] == 'v') verbose = true, quiet = false;
 #ifdef ENCRYPT
             else if (flag[fIndex] == 'p') showPassword = true;
@@ -100,7 +103,22 @@ int main(int argc, char** argv)
 #ifdef ENCRYPT
         decryptRSA(password, archiveName, archiveLZW);
 #else
-        if (rename(archiveName, archiveLZW)) SYS_DIE("rename");
+        if (removeOriginal)
+        {
+            if (rename(archiveName, archiveLZW)) SYS_DIE("rename");
+        }
+        else
+        {
+            // copy it over
+            FILE* archive = fopen(archiveName, "r");
+            FILE* lzw = fopen(archiveLZW, "w");
+            if (!archive) SYS_DIE("fopen");
+            if (!lzw) SYS_DIE("fopen");
+            int c;
+            while ((c = fgetc(archive)) != EOF) fputc(c, lzw);
+            if (fclose(archive)) SYS_ERROR("fclose");
+            if (fclose(lzw)) SYS_ERROR("fclose");
+        }
 #endif
         decode(archiveLZW, archiveFar);
         extract(archiveFar);

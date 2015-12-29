@@ -96,7 +96,8 @@ HashTable pruneTable(Array array)
             insertFrequentCode(table, array, i+1, &nextCode);
         }
     }
-    PROGRESS("%s", "LZW table pruned");
+    PROGRESS("LZW table pruned, %d of %d codes remain",
+        table->count, array->count);
     return table;
 }
 

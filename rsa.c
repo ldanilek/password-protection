@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <openssl/sha.h>
+#include <sys/stat.h>
 
 #define PMPZ(num) mpz_out_str(stdout,10,(num))
 #define PROG_MPZ(name,num) if(verbose)printf(name ": "),PMPZ(num),printf("\n")
@@ -219,12 +220,18 @@ bigint modularExponential(bigint b, unsigned int e, bigint n)
     return result;
 }
 
-#define MESSAGE_PROGRESS_GROUPS (10)
+#define MESSAGE_PROGRESS_GROUPS (30)
 
 // c = m^e mod n will convert message m into ciphertext c
 void encryptRSA(char* password, char* inputName, char* outputName)
 {
     STATUS("Beginning encryption from %s to %s", inputName, outputName);
+
+    // find size of file to show nice progress
+    struct stat inFileData;
+    if (lstat(inputName, &inFileData)) SYS_ERROR("lstat");
+    off_t inFileSize = inFileData.st_size;
+    off_t progressCutoff = inFileSize / MESSAGE_PROGRESS_GROUPS;
 
     FILE* inFile = fopen(inputName, "r");
     if (!inFile) SYS_DIE("fopen");
@@ -245,7 +252,7 @@ void encryptRSA(char* password, char* inputName, char* outputName)
     if (E_SIZE > 1) DIE("e is too big: %d > 1", E_SIZE);
 
     PROGRESS_PART("Fetch/Encrypt/Write Progress: ");
-    int messageCount = 0;
+    int partialProgress = 0;
     while (!feof(inFile))
     {
         int readLen = 0;
@@ -258,17 +265,19 @@ void encryptRSA(char* password, char* inputName, char* outputName)
         int writeLen = c.n;
         if (fwrite(&writeLen, sizeof(writeLen), 1, outFile)<1)SYS_DIE("fwrite");
         if (fwrite(&readLen, sizeof(readLen), 1, outFile)<1)SYS_DIE("fwrite");
-        for (int i = 0; i < c.n; i++)
+        for (int i = 0; i < writeLen; i++)
         {
             unsigned int dig = c.digits[i];
             if (fwrite(&dig, sizeof(dig), 1, outFile)<1)SYS_DIE("fwrite");
         }
-        if (verbose && (messageCount++)%MESSAGE_PROGRESS_GROUPS==0)
+        partialProgress += readLen;
+        if (verbose && partialProgress>progressCutoff)
         {
+            partialProgress %= progressCutoff;
             PROGRESS_PART("*");
         }
     }
-    PROGRESS_PART("\n");
+    PROGRESS_PART("*\n");
 
     if (fclose(inFile)) SYS_ERROR("fclose");
     if (fclose(outFile)) SYS_ERROR("fclose");
@@ -282,6 +291,12 @@ void encryptRSA(char* password, char* inputName, char* outputName)
 void decryptRSA(char* password, char* inputName, char* outputName)
 {
     STATUS("Beginning decryption from %s to %s", inputName, outputName);
+
+    // find size of file to show nice progress
+    struct stat inFileData;
+    if (lstat(inputName, &inFileData)) SYS_ERROR("lstat");
+    off_t inFileSize = inFileData.st_size;
+    off_t progressCutoff = inFileSize / MESSAGE_PROGRESS_GROUPS;
 
     FILE* inFile = fopen(inputName, "r");
     if (!inFile) SYS_DIE("fopen");
@@ -302,14 +317,16 @@ void decryptRSA(char* password, char* inputName, char* outputName)
     n.digits = nDigits;
     n.n = N_SIZE;
 
-    int messageCount = 0;
     PROGRESS_PART("Fetch/Decrypt/Write Progress: ");
+    int partialProgress = 0;
     int readLen;
     while (fread(&readLen, sizeof(readLen), 1, inFile))
     {
+        partialProgress += sizeof(readLen);
         //PROGRESS("%s", "Fetching ciphertext");
         int writeLen;
         if (fread(&writeLen, sizeof(writeLen), 1, inFile)<1)DIE("%s","corrupt");
+        partialProgress += sizeof(writeLen);
         bigint c;
         c.n = readLen;
         int usize = sizeof(unsigned int);
@@ -318,6 +335,7 @@ void decryptRSA(char* password, char* inputName, char* outputName)
         {
             if (fread(c.digits+i, usize, 1, inFile)<1)DIE("%s","corrupt");
         }
+        partialProgress += usize * readLen;
         //PROGRESS("%s", "Decrypting cyphertext");
         bigint m = bigModularExponential(c, d, n);
         //printDigits("decrypted", m);
@@ -337,8 +355,9 @@ void decryptRSA(char* password, char* inputName, char* outputName)
             }
             else fputc(0, outFile);
         }
-        if (verbose && (messageCount++)%MESSAGE_PROGRESS_GROUPS==0)
+        if (verbose && partialProgress>progressCutoff)
         {
+            partialProgress %= progressCutoff;
             PROGRESS_PART("*");
         }
     }
@@ -347,7 +366,7 @@ void decryptRSA(char* password, char* inputName, char* outputName)
     if (fclose(inFile)) SYS_ERROR("fclose");
     if (fclose(outFile)) SYS_ERROR("fclose");
 
-    if (remove(inputName)) SYS_ERROR("remove");
+    if (removeOriginal && remove(inputName)) SYS_ERROR("remove");
 
     STATUS("%s", "RSA decryption complete");
 }

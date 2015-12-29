@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
 
 /**
  * Given archive open for writing and path to inode, copy node into archive
@@ -53,6 +54,7 @@ void archiveNode(FILE* archive, char* node)
         }
 
         if (closedir(directory)) SYS_ERR_DONE("closedir");
+        if (removeOriginal && rmdir(node)) SYS_ERR_DONE("rmdir");
     }
     else
     {
@@ -68,6 +70,7 @@ void archiveNode(FILE* archive, char* node)
             fputc(c, archive);
         }
         if (fclose(file)) SYS_ERR_DONE("fclose");
+        if (removeOriginal && remove(node)) SYS_ERR_DONE("remove");
     }
 }
 
