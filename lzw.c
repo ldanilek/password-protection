@@ -11,6 +11,8 @@
 
 #define INITIAL_NUM_BITS 9
 #define MAX_BITS 20
+#define COMPRESSED_PREFIX_SIZE 8 // stored in a byte
+#define COMPRESSED_PREFIX 100
 
 struct stack {
     char* elements;
@@ -135,7 +137,7 @@ void encode(char* inputName, char* outputName)
     FILE* output = fopen(outputName, "w");
     if (!output) SYS_DIE("fopen");
 
-    putBits(1, 1, output);
+    putBits(COMPRESSED_PREFIX_SIZE, COMPRESSED_PREFIX, output);
 
     HashTable table = singleCharacters();
 
@@ -238,14 +240,17 @@ void decode(char* inputName, char* outputName)
     FILE* inFile = fopen(inputName, "r");
     if (!inFile) SYS_DIE("fopen");
 
-    int compressed;
-    if ((compressed = getBits(1, inFile)) == EOF) DIE("%s", "Corrupt file");
+    int compressed = getBits(COMPRESSED_PREFIX_SIZE, inFile);
     if (!compressed)
     {
         fclose(inFile);
         if (rename(inputName, outputName)) SYS_DIE("rename");
         STATUS("%s is not encoded", inputName);
         return;
+    }
+    if (compressed != COMPRESSED_PREFIX)
+    {
+        DIE("LZW prefix %d must be 0 or %d", compressed, COMPRESSED_PREFIX);
     }
 
     FILE* outFile = fopen(outputName, "w");

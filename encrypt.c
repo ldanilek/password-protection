@@ -1,7 +1,9 @@
 #include "encrypt.h"
 #include "far.h"
 #include "lzw.h"
+#ifdef ENCRYPT
 #include "rsa.h"
+#endif
 #include <libgen.h>
 #include <ctype.h>
 
@@ -21,12 +23,12 @@ int main(int argc, char** argv)
 {
     // find which program to run
     bool decrypt;
-    char* programToRun = basename(argv[0]);
-    if (strcmp(programToRun, "encrypt") == 0)
+    char* progName = basename(argv[0]);
+    if (!strcmp(progName, "encrypt") || !strcmp(progName, "compress"))
     {
         decrypt = false;
     }
-    else if (strcmp(programToRun, "decrypt") == 0)
+    else if (!strcmp(progName, "decrypt") || !strcmp(progName, "decompress"))
     {
         decrypt = true;
     }
@@ -55,6 +57,7 @@ int main(int argc, char** argv)
     char* archiveName = argv[flagIndex];
     int archiveNameLen = strlen(archiveName);
 
+#ifdef ENCRYPT
     // take password as input
     char* password;
     if (showPassword)
@@ -79,6 +82,7 @@ int main(int argc, char** argv)
     {
         password = getpass(PASSWORD_PROMPT);
     }
+#endif
 
     // make room for .far with null terminator
     char* archiveFar = calloc(archiveNameLen + 5, sizeof(char));
@@ -89,7 +93,9 @@ int main(int argc, char** argv)
 
     if (decrypt)
     {
+#ifdef ENCRYPT
         decryptRSA(password, archiveName, archiveLZW);
+#endif
         decode(archiveLZW, archiveFar);
         extract(archiveFar);
     }
@@ -97,10 +103,14 @@ int main(int argc, char** argv)
     {
         archive(archiveFar, argc-flagIndex-1, argv+flagIndex+1);
         encode(archiveFar, archiveLZW);
+#ifdef ENCRYPT
         encryptRSA(password, archiveLZW, archiveName);
+#endif
     }
     
+#ifdef ENCRYPT
     if (showPassword) free(password);
+#endif
     free(archiveFar);
     free(archiveLZW);
 }

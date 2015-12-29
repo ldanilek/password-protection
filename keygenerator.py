@@ -44,12 +44,12 @@ def isPrime(n,PROB):
 
 assurance = 100
 
-pBits = 100
+pBits = 1000
 p = random.getrandbits(pBits)
 while not isPrime(p, assurance):
     p = random.getrandbits(pBits)
 
-qBits = 110
+qBits = 1100
 q = random.getrandbits(qBits)
 while not isPrime(q, assurance):
     q = random.getrandbits(qBits)

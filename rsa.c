@@ -6,12 +6,10 @@
 #include <gmp.h>
 #include <limits.h>
 
-#define BYTE_GROUP (4)
+#define PMPZ(num) mpz_out_str(stdout,10,(num))
+#define PROG_MPZ(name,num) if(verbose)printf(name ": "),PMPZ(num),printf("\n")
 
-typedef unsigned long long bbig;
-
-// to read a message in, this must be a multiple of 8 (bits)
-#define BASE (((bbig)1)<<((bbig)BYTE_GROUP*8))
+#define BYTE_GROUP (sizeof(unsigned int))
 
 // most significant digits are at the end (but each digit is stored regularly)
 typedef struct {
@@ -20,20 +18,32 @@ typedef struct {
     int capacity;
 } bigint;
 
+void printDigits(char* name, bigint num)
+{
+    if (!verbose) return;
+    printf("%s: ", name);
+    for (int i = 0; i < num.n; i++)
+    {
+        printf("%u, ", num.digits[i]);
+    }
+    printf("\n");
+}
+
 void normalize(bigint* num)
 {
     while (num->n > 1 && num->digits[num->n - 1] == 0) num->n--;
 }
 
+// must have set the capacity of the number and digits must be on the heap
 void appendDigit(bigint* n, unsigned int digit)
 {
-    int usize = sizeof(unsigned int);
+    static int usize = sizeof(unsigned int);
     if (++n->n > n->capacity)
     {
         n->capacity *= 2;
-        n->digits = realloc(n->digits, usize*n->capacity);
+        n->digits = realloc(n->digits, usize * n->capacity);
     }
-    n->digits[n->n-1] = digit;
+    n->digits[n->n - 1] = digit;
 }
 
 // reads from file one digit at a time until message has > goal digits
@@ -52,8 +62,10 @@ bigint makeMessage(FILE* inFile, int goal, int* totalBytes)
         unsigned int accumulator = 0;
         for (int i = 0; i < BYTE_GROUP; i++)
         {
-            accumulator <<= 1;
+            // shift over to make room for this BYTE (8 bits)
+            accumulator <<= 8;
             accumulator += bytes[i];
+            //PROGRESS("read byte %d", (int)bytes[i]);
         }
         appendDigit(&message, accumulator);
         if (message.n > goal) return message;
@@ -89,6 +101,18 @@ bigint convertMPZ(mpz_t a)
     mpz_init_set_ui(base, UINT_MAX);
     mpz_add_ui(base, base, 1); // INT_MAX+1 is the base of these numbers
     bigint b;
+    b.digits = malloc(sizeof(unsigned int));
+    b.n = 0;
+    b.capacity = 1;
+
+    mpz_t digit;
+    mpz_init(digit);
+    while (mpz_sgn(a) > 0)
+    {
+        mpz_tdiv_qr(a, digit, a, base);
+        appendDigit(&b, mpz_get_ui(digit));
+    }
+    mpz_clear(digit);
 
     return b;
 }
@@ -103,6 +127,14 @@ bigint bigModularExponential(bigint b, bigint e, bigint n)
     mpz_t rop;
     mpz_init(rop);
     mpz_powm(rop, base, exp, mod); // this is where the magic happens
+
+    /*
+    PROG_MPZ("base", base);
+    PROG_MPZ("exp", exp);
+    PROG_MPZ("mod", mod);
+    PROG_MPZ("result", rop);
+    */
+
     bigint result = convertMPZ(rop);
     mpz_clear(base);
     mpz_clear(exp);
@@ -119,13 +151,24 @@ bigint modularExponential(bigint b, unsigned int e, bigint n)
     unsigned long int exp = e;
     convertBigint(mod, n);
     mpz_t rop;
+    mpz_init(rop);
     mpz_powm_ui(rop, base, exp, mod); // this is where the magic happens
+
+    /*
+    PROG_MPZ("base", base);
+    PROGRESS("exp: %lu", exp);
+    PROG_MPZ("mod", mod);
+    PROG_MPZ("result", rop);
+    */
+
     bigint result = convertMPZ(rop);
     mpz_clear(base);
     mpz_clear(mod);
     mpz_clear(rop);
     return result;
 }
+
+#define MESSAGE_PROGRESS_GROUPS (10)
 
 // c = m^e mod n will convert message m into ciphertext c
 void encryptRSA(char* password, char* inputName, char* outputName)
@@ -146,14 +189,17 @@ void encryptRSA(char* password, char* inputName, char* outputName)
     unsigned int e = eDigits[0];
     if (E_SIZE > 1) DIE("e is too big: %d > 1", E_SIZE);
 
+    PROGRESS_PART("Fetch/Encrypt/Write Progress: ");
+    int messageCount = 0;
     while (!feof(inFile))
     {
         int readLen = 0;
-        PROGRESS("%s", "Fetching message");
+        //PROGRESS("%s", "Fetching message");
         bigint m = makeMessage(inFile, n.n-3, &readLen);
-        PROGRESS("%s", "Encrypting message");
+        //PROGRESS("%s", "Encrypting message");
+        //printDigits("to encrypt", m);
         bigint c = modularExponential(m, e, n);
-        PROGRESS("%s", "Writing encrypted message");
+        //PROGRESS("%s", "Writing encrypted message");
         int writeLen = c.n;
         if (fwrite(&writeLen, sizeof(writeLen), 1, outFile)<1)SYS_DIE("fwrite");
         if (fwrite(&readLen, sizeof(readLen), 1, outFile)<1)SYS_DIE("fwrite");
@@ -162,7 +208,12 @@ void encryptRSA(char* password, char* inputName, char* outputName)
             unsigned int dig = c.digits[i];
             if (fwrite(&dig, sizeof(dig), 1, outFile)<1)SYS_DIE("fwrite");
         }
+        if (verbose && (messageCount++)%MESSAGE_PROGRESS_GROUPS==0)
+        {
+            PROGRESS_PART("*");
+        }
     }
+    PROGRESS_PART("\n");
 
     if (fclose(inFile)) SYS_ERROR("fclose");
     if (fclose(outFile)) SYS_ERROR("fclose");
@@ -190,10 +241,12 @@ void decryptRSA(char* password, char* inputName, char* outputName)
     n.digits = nDigits;
     n.n = N_SIZE;
 
+    int messageCount = 0;
+    PROGRESS_PART("Fetch/Decrypt/Write Progress: ");
     int readLen;
     while (fread(&readLen, sizeof(readLen), 1, inFile))
     {
-        PROGRESS("%s", "Fetching ciphertext");
+        //PROGRESS("%s", "Fetching ciphertext");
         int writeLen;
         if (fread(&writeLen, sizeof(writeLen), 1, inFile)<1)DIE("%s","corrupt");
         bigint c;
@@ -204,20 +257,34 @@ void decryptRSA(char* password, char* inputName, char* outputName)
         {
             if (fread(c.digits+i, usize, 1, inFile)<1)DIE("%s","corrupt");
         }
-        PROGRESS("%s", "Decrypting cyphertext");
+        //PROGRESS("%s", "Decrypting cyphertext");
         bigint m = bigModularExponential(c, d, n);
-        PROGRESS("%s", "Writing decrypted message");
+        //printDigits("decrypted", m);
+        //PROGRESS("%s", "Writing decrypted message");
         for (int i = 0; i < writeLen; i++)
         {
             if (i < m.n * BYTE_GROUP)
             {
                 unsigned int digit = m.digits[i / BYTE_GROUP];
-                char* byte = ((char*)(&digit)) + (i % BYTE_GROUP);
+                unsigned char* bytes = (unsigned char*)(&digit);
+                int byteIndex = i % BYTE_GROUP;
+                // but number isn't stored like this.
+                // 0->3, 1->2, 2->1, 3->0
+                unsigned char* byte = bytes+(BYTE_GROUP-1-byteIndex);
                 if (fwrite(byte, 1, 1, outFile)<1) SYS_DIE("fwrite");
+                //PROGRESS("write byte %d", (int)(*byte));
             }
             else fputc(0, outFile);
         }
+        if (verbose && (messageCount++)%MESSAGE_PROGRESS_GROUPS==0)
+        {
+            PROGRESS_PART("*");
+        }
     }
+    PROGRESS_PART("\n");
+
+    if (fclose(inFile)) SYS_ERROR("fclose");
+    if (fclose(outFile)) SYS_ERROR("fclose");
 
     STATUS("%s", "RSA decryption complete");
 }

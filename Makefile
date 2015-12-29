@@ -7,24 +7,38 @@ CFLAGS = -ggdb3 -O0 -Qunused-arguments -std=c11 -Wall -Werror
 # name for executable
 EXE = encrypt
 
-# space-separated list of header files
-HDRS = encrypt.h far.h stringarray.h stringtable.h lzw.h bitcode.h keys.h rsa.h
-
 # space-separated list of libraries, if any,
 # each of which should be prefixed with -l
 LIBS = -lgmp
 
+C_SRCS = encrypt.c far.c bitcode.c stringtable.c stringarray.c lzw.c
+
+C_HDRS = encrypt.h far.h stringarray.h stringtable.h lzw.h bitcode.h
+
+# space-separated list of header files
+HDRS = $(C_HDRS) keys.h rsa.h
+
 # space-separated list of source files
-SRCS = encrypt.c far.c bitcode.c stringtable.c stringarray.c lzw.c rsa.c
+SRCS = $(C_SRCS) rsa.c
 
 # automatically generated list of object files
 OBJS = $(SRCS:.c=.o)
+
+C_OBJS = $(C_SRCS:.c=.o)
 
 all: encrypt decrypt
 
 # main target
 $(EXE): $(OBJS) $(HDRS) Makefile
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIBS)
+	$(CC) $(CFLAGS) -DENCRYPT -o $@ $(OBJS) $(LIBS)
+
+compression: compress decompress
+
+compress: $(C_OBJS) $(C_HDRS) Makefile
+	$(CC) $(CFLAGS) -o $@ $(C_OBJS)
+
+decompress: compress
+	ln -f compress decompress
 
 decrypt: $(EXE)
 	ln -f $(EXE) decrypt
