@@ -273,6 +273,8 @@ void encryptRSA(char* password, char* inputName, char* outputName)
     if (fclose(inFile)) SYS_ERROR("fclose");
     if (fclose(outFile)) SYS_ERROR("fclose");
 
+    if (remove(inputName)) SYS_ERROR("remove");
+
     STATUS("%s", "RSA encryption complete");
 }
 
@@ -344,6 +346,8 @@ void decryptRSA(char* password, char* inputName, char* outputName)
 
     if (fclose(inFile)) SYS_ERROR("fclose");
     if (fclose(outFile)) SYS_ERROR("fclose");
+
+    if (remove(inputName)) SYS_ERROR("remove");
 
     STATUS("%s", "RSA decryption complete");
 }

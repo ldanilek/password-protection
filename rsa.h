@@ -6,8 +6,10 @@
 #ifndef RSA
 #define RSA
 
+// removes inputName file, overwrites outputName file
 void encryptRSA(char* password, char* inputName, char* outputName);
 
+// removes inputName file, overwrites outputName file
 void decryptRSA(char* password, char* inputName, char* outputName);
 
 #endif

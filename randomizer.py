@@ -1,3 +1,5 @@
+# handy little program to create random files of printable characters
+
 from random import random
 
 fileName = raw_input("file name: ")
@@ -13,7 +15,6 @@ for i in range(32, 127):
 
 for i in range(characters):
     file.write(meta[int(random() * len(meta))])
-    file.write("\n")
 
 file.close()
 
