@@ -3,6 +3,8 @@
 #include "encrypt.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <gmp.h>
+#include <limits.h>
 
 #define BYTE_GROUP (4)
 
@@ -38,14 +40,24 @@ bool greaterThan(bigint one, bigint two)
     return false;
 }
 
+void appendDigit(bigint* n, unsigned int digit)
+{
+    int usize = sizeof(unsigned int);
+    if (++n->n > n->capacity)
+    {
+        n->capacity *= 2;
+        n->digits = realloc(n->digits, usize*n->capacity);
+    }
+    n->digits[n->n-1] = accumulator;
+}
+
 // reads from file one digit at a time until message has > goal digits
 bigint makeMessage(FILE* inFile, int goal, int* totalBytes)
 {
     bigint message;
     message.n = 0;
     message.capacity = 10;
-    int usize = sizeof(unsigned int);
-    message.digits = calloc(usize, message.capacity);
+    message.digits = calloc(sizeof(unsigned int), message.capacity);
     unsigned char bytes[BYTE_GROUP];
     int bytesRead;
     while ((bytesRead = fread(bytes, 1, BYTE_GROUP, inFile)))
@@ -58,18 +70,14 @@ bigint makeMessage(FILE* inFile, int goal, int* totalBytes)
             accumulator <<= 1;
             accumulator += bytes[i];
         }
-        if (++message.n > message.capacity)
-        {
-            message.capacity *= 2;
-            message.digits = realloc(message.digits, usize*message.capacity);
-        }
-        message.digits[message.n-1] = accumulator;
+        appendDigit(&message, accumulator);
         if (message.n > goal) return message;
     }
     // fingers crossed that this number is relatively prime to n
     return message;
 }
 
+/*
 // restriction: a > n
 // a = a - b
 void subtract(bigint* a, bigint b)
@@ -131,7 +139,9 @@ void multiplyBy(bigint* a, bigint b, bigint n)
     free(a->digits);
     *a = product;
     modulo(a, n);
-}
+}*/
+
+/*
 
 // computes b^e mod n
 // input restraints: m > 1 and b < n
@@ -158,6 +168,103 @@ bigint modularExponential(bigint b, unsigned int e, bigint n)
         multiplyBy(&b, bCopy, n);
         free(bCopy.digits);
     }
+    return result;
+}
+
+// divides by two via a bitshift
+void shiftRight(bigint* d)
+{
+
+}
+
+bigint bigModularExponential(bigint b, bigint d, bigint n)
+{
+    bigint result;
+    result.capacity = 1;
+    result.n = 1;
+    result.digits = malloc(sizeof(unsigned int));
+    result.digits[0] = 1;
+    normalize(&d);
+    while (d.n > 1 || d.digits[0] > 0)
+    {
+        if (d.digits[0] & 1)
+        {
+            multiplyBy(&result, b, n);
+        }
+        shiftRight(&d);
+        // copy base so can square it
+        bigint bCopy;
+        bCopy.n = b.n;
+        bCopy.digits = malloc(b.n * sizeof(unsigned int));
+        for (int i = 0; i < b.n; i++) bCopy.digits[i] = b.digits[i];
+        multiplyBy(&b, bCopy, n);
+        free(bCopy.digits);
+    }
+    return result;
+}*/
+
+void convertBigint(mpz_t result, bigint a)
+{
+    mpz_init_set_ui(result, 0);
+    mpz_t base;
+    mpz_init_set_ui(base, UINT_MAX);
+    mpz_add_ui(base, base, 1); // INT_MAX+1 is the base of these numbers
+    mpz_t place;
+    mpz_init_set_ui(place, 1); // first is the ones place
+    for (int i = 0; i < a.n; i++)
+    {
+        mpz_t thisPlace;
+        mpz_init_set_ui(thisPlace, a.digits[i]);
+        mpz_mul(thisPlace, thisPlace, place);
+        mpz_add(result, result, thisPlace);
+        mpz_mul(place, place, base);
+        mpz_clear(thisPlace);
+    }
+    mpz_clear(place);
+    mpz_clear(base);
+}
+
+bigint convertMPZ(mpz_t a)
+{
+    mpz_t base;
+    mpz_init_set_ui(base, UINT_MAX);
+    mpz_add_ui(base, base, 1); // INT_MAX+1 is the base of these numbers
+    bigint b;
+
+    return b;
+}
+
+// computes b^e mod n
+bigint bigModularExponential(bigint b, bigint e, bigint n)
+{
+    mpz_t base, exp, mod;
+    convertBigint(base, b);
+    convertBigint(exp, e);
+    convertBigint(mod, n);
+    mpz_t rop;
+    mpz_init(rop);
+    mpz_powm(rop, base, exp, mod); // this is where the magic happens
+    bigint result = convertMPZ(rop);
+    mpz_clear(base);
+    mpz_clear(exp);
+    mpz_clear(mod);
+    mpz_clear(rop);
+    return result;
+}
+
+// computes b^e mod n
+bigint modularExponential(bigint b, unsigned int e, bigint n)
+{
+    mpz_t base, mod;
+    convertBigint(base, b);
+    unsigned long int exp = e;
+    convertBigint(mod, n);
+    mpz_t rop;
+    mpz_powm_ui(rop, base, exp, mod); // this is where the magic happens
+    bigint result = convertMPZ(rop);
+    mpz_clear(base);
+    mpz_clear(mod);
+    mpz_clear(rop);
     return result;
 }
 
@@ -188,7 +295,7 @@ void encryptRSA(char* password, char* inputName, char* outputName)
         PROGRESS("%s", "Encrypting message");
         bigint c = modularExponential(m, e, n);
         PROGRESS("%s", "Writing encrypted message");
-        int writeLen = c.n * 4;
+        int writeLen = c.n;
         if (fwrite(&writeLen, sizeof(writeLen), 1, outFile)<1)SYS_DIE("fwrite");
         if (fwrite(&readLen, sizeof(readLen), 1, outFile)<1)SYS_DIE("fwrite");
         for (int i = 0; i < c.n; i++)
@@ -207,6 +314,52 @@ void encryptRSA(char* password, char* inputName, char* outputName)
 // m = c^d mod n will convert ciphertext c into message m
 void decryptRSA(char* password, char* inputName, char* outputName)
 {
+    STATUS("Beginning decryption from %s to %s", inputName, outputName);
 
+    FILE* inFile = fopen(inputName, "r");
+    if (!inFile) SYS_DIE("fopen");
+    FILE* outFile = fopen(outputName, "w");
+    if (!outFile) SYS_DIE("fopen");
+
+    bigint d;
+    unsigned int dData[] = D_DATA;
+    d.digits = dData;
+    d.n = D_SIZE;
+
+    bigint n;
+    unsigned int nDigits[] = N_DATA;
+    n.digits = nDigits;
+    n.n = N_SIZE;
+
+    int readLen;
+    while (fread(&readLen, sizeof(readLen), 1, inFile))
+    {
+        PROGRESS("%s", "Fetching ciphertext");
+        int writeLen;
+        if (fread(&writeLen, sizeof(writeLen), 1, inFile)<1)DIE("%s","corrupt");
+        bigint c;
+        c.n = readLen;
+        int usize = sizeof(unsigned int);
+        c.digits = calloc(readLen, usize);
+        for (int i = 0; i < readLen; i++)
+        {
+            if (fread(c.digits+i, usize, 1, inFile)<1)DIE("%s","corrupt");
+        }
+        PROGRESS("%s", "Decrypting cyphertext");
+        bigint m = bigModularExponential(c, d, n);
+        PROGRESS("%s", "Writing decrypted message");
+        for (int i = 0; i < writeLen; i++)
+        {
+            if (i < m.n * BYTE_GROUP)
+            {
+                unsigned int digit = m.digits[i / BYTE_GROUP];
+                char* byte = ((char*)(&digit)) + (i % BYTE_GROUP);
+                if (fwrite(byte, 1, 1, outFile)<1) SYS_DIE("fwrite");
+            }
+            else fputc(0, outFile);
+        }
+    }
+
+    STATUS("%s", "RSA decryption complete");
 }
 

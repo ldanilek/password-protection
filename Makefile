@@ -12,7 +12,7 @@ HDRS = encrypt.h far.h stringarray.h stringtable.h lzw.h bitcode.h keys.h rsa.h
 
 # space-separated list of libraries, if any,
 # each of which should be prefixed with -l
-LIBS = 
+LIBS = -lgmp
 
 # space-separated list of source files
 SRCS = encrypt.c far.c bitcode.c stringtable.c stringarray.c lzw.c rsa.c

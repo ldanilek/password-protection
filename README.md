@@ -17,6 +17,7 @@ Security of this program is based on the following assumptions:
 
 ## Initial setup
 
+* Install (GMP)[https://gmplib.org]
 * In the command line, run ```python keygenerator.py```. This will personalize your encryption system by writing random RSA keys to the keys.h file.
 * Run ```make``` - repeat with the same keys.h on all computers for which you want to encrypt or decrypt.
 * Encrypt or remove the file keys.h - this is critical for security
