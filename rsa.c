@@ -5,10 +5,14 @@
 #include <stdlib.h>
 #include <gmp.h>
 #include <limits.h>
+#include <string.h>
+#include <stdbool.h>
+#include <openssl/sha.h>
 
 #define PMPZ(num) mpz_out_str(stdout,10,(num))
 #define PROG_MPZ(name,num) if(verbose)printf(name ": "),PMPZ(num),printf("\n")
 
+// this is assumed to be 4. if it changes, keygenerator.py must be updated
 #define BYTE_GROUP (sizeof(unsigned int))
 
 // most significant digits are at the end (but each digit is stored regularly)
@@ -17,6 +21,67 @@ typedef struct {
     int n;
     int capacity;
 } bigint;
+
+// salt is stored at the beginning of hash
+#define SALT_LEN (10)
+#define HASH_LEN (SALT_LEN+SHA_DIGEST_LENGTH)
+
+// compares n bytes, ignoring null terminators
+bool arraysAreEqual(unsigned char* one, unsigned char* two, int n)
+{
+    return n<1 || (one[0]==two[0] && arraysAreEqual(one+1,two+1,n-1));
+}
+
+// if password doesn't match hash, program dies
+void checkPassword(char* password, unsigned char* hash)
+{
+    // password is null-terminated
+    int passwordLength = strlen(password);
+    // hash is HASH_LEN == SALT_LEN+SHA_DIGEST_LENGTH characters long
+
+    unsigned char saltedPassword[SALT_LEN+passwordLength];
+    for (int i = 0; i < SALT_LEN; i++)
+    {
+        saltedPassword[i] = hash[i];
+    }
+    for (int i = 0; i < passwordLength; i++)
+    {
+        saltedPassword[i + SALT_LEN] = password[i];
+    }
+
+    unsigned char passwordHash[SHA_DIGEST_LENGTH];
+
+    SHA1(saltedPassword, SALT_LEN+passwordLength, passwordHash);
+
+    if (!arraysAreEqual(passwordHash, hash + SALT_LEN, SHA_DIGEST_LENGTH))
+    {
+        DIE("%s", "Wrong Password");
+    }
+    else
+    {
+        STATUS("%s", "Password correct");
+    }
+}
+
+// pass in NULL-terminated password
+// and array of length HASH_LEN to put the hash
+void hashPassword(char* password, unsigned char* hash)
+{
+    PROGRESS("%s", "Generating password hash");
+    int passwordLength = strlen(password);
+    // generate random salt
+    unsigned char saltedPassword[SALT_LEN+passwordLength];
+    for (int i = 0; i < SALT_LEN; i++)
+    {
+        hash[i] = saltedPassword[i] = arc4random_uniform(UCHAR_MAX + 1);
+    }
+    for (int i = 0; i < passwordLength; i++)
+    {
+        saltedPassword[i + SALT_LEN] = password[i];
+    }
+
+    SHA1(saltedPassword, SALT_LEN+passwordLength, hash + SALT_LEN);
+}
 
 void printDigits(char* name, bigint num)
 {
@@ -128,13 +193,6 @@ bigint bigModularExponential(bigint b, bigint e, bigint n)
     mpz_init(rop);
     mpz_powm(rop, base, exp, mod); // this is where the magic happens
 
-    /*
-    PROG_MPZ("base", base);
-    PROG_MPZ("exp", exp);
-    PROG_MPZ("mod", mod);
-    PROG_MPZ("result", rop);
-    */
-
     bigint result = convertMPZ(rop);
     mpz_clear(base);
     mpz_clear(exp);
@@ -154,13 +212,6 @@ bigint modularExponential(bigint b, unsigned int e, bigint n)
     mpz_init(rop);
     mpz_powm_ui(rop, base, exp, mod); // this is where the magic happens
 
-    /*
-    PROG_MPZ("base", base);
-    PROGRESS("exp: %lu", exp);
-    PROG_MPZ("mod", mod);
-    PROG_MPZ("result", rop);
-    */
-
     bigint result = convertMPZ(rop);
     mpz_clear(base);
     mpz_clear(mod);
@@ -179,6 +230,10 @@ void encryptRSA(char* password, char* inputName, char* outputName)
     if (!inFile) SYS_DIE("fopen");
     FILE* outFile = fopen(outputName, "w");
     if (!outFile) SYS_DIE("fopen");
+
+    unsigned char hash[HASH_LEN];
+    hashPassword(password, hash);
+    if (fwrite(hash, 1, HASH_LEN, outFile) < HASH_LEN) SYS_DIE("fwrite");
 
     bigint n;
     unsigned int nDigits[] = N_DATA;
@@ -230,6 +285,10 @@ void decryptRSA(char* password, char* inputName, char* outputName)
     if (!inFile) SYS_DIE("fopen");
     FILE* outFile = fopen(outputName, "w");
     if (!outFile) SYS_DIE("fopen");
+
+    unsigned char hash[HASH_LEN];
+    if (fread(hash, 1, HASH_LEN, inFile) < HASH_LEN) SYS_DIE("fread");
+    checkPassword(password, hash);
 
     bigint d;
     unsigned int dData[] = D_DATA;

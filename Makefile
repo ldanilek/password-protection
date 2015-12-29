@@ -1,15 +1,17 @@
+DEFS = -DENCRYPT
+
 # compiler to use
 CC = clang
 
 # flags to pass compiler
-CFLAGS = -ggdb3 -O0 -Qunused-arguments -std=c11 -Wall -Werror -DENCRYPT
+CFLAGS = -ggdb3 -O0 -Qunused-arguments -std=c11 -Wall -Werror $(DEFS)
 
 # name for executable
 EXE = encrypt
 
 # space-separated list of libraries, if any,
 # each of which should be prefixed with -l
-LIBS = -lgmp
+LIBS = -lgmp -lssl -lcrypto
 
 C_SRCS = encrypt.c far.c bitcode.c stringtable.c stringarray.c lzw.c
 

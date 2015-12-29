@@ -11,8 +11,8 @@
 
 #define INITIAL_NUM_BITS 9
 #define MAX_BITS 20
-#define COMPRESSED_PREFIX_SIZE 8 // stored in a byte
-#define COMPRESSED_PREFIX 100
+#define COMPRESSED_PREFIX_SIZE 1
+#define COMPRESSED_PREFIX 1
 
 struct stack {
     char* elements;

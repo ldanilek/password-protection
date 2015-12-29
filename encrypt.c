@@ -9,7 +9,7 @@
 
 #include <string.h>
 #include <stdlib.h>
-#define _XOPEN_SOURCE
+#include <pwd.h>
 #include <unistd.h>
 
 #define PASSWORD_PROMPT "Input password: "
@@ -35,7 +35,9 @@ int main(int argc, char** argv)
     else DIE("Invalid program name %s", argv[0]);
 
     // determine which flags are set
+#ifdef ENCRYPT
     bool showPassword = false;
+#endif
     int flagIndex = 1;
     while (flagIndex < argc && argv[flagIndex][0] == '-')
     {
@@ -43,9 +45,11 @@ int main(int argc, char** argv)
         int flagCount = strlen(flag);
         for (int fIndex = 0; fIndex < flagCount; fIndex++)
         {
-            if (flag[fIndex] == 'p') showPassword = true;
-            else if (flag[fIndex] == 'q') quiet = true, verbose = false;
+            if (flag[fIndex] == 'q') quiet = true, verbose = false;
             else if (flag[fIndex] == 'v') verbose = true, quiet = false;
+#ifdef ENCRYPT
+            else if (flag[fIndex] == 'p') showPassword = true;
+#endif
             else DIE("Invalid flag %c", flag[fIndex]);
         }
         flagIndex++;
@@ -95,6 +99,8 @@ int main(int argc, char** argv)
     {
 #ifdef ENCRYPT
         decryptRSA(password, archiveName, archiveLZW);
+#else
+        if (rename(archiveName, archiveLZW)) SYS_DIE("rename");
 #endif
         decode(archiveLZW, archiveFar);
         extract(archiveFar);
@@ -105,6 +111,8 @@ int main(int argc, char** argv)
         encode(archiveFar, archiveLZW);
 #ifdef ENCRYPT
         encryptRSA(password, archiveLZW, archiveName);
+#else
+        if (rename(archiveLZW, archiveName)) SYS_DIE("rename");
 #endif
     }
     

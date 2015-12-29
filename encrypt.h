@@ -40,7 +40,7 @@
  * If ArchiveName.lzw is bigger, ignore it and use ArchiveName.far instead
  *     In decryption, run lzw decompression iff the first byte is nonzero
  * Create ArchiveName by running RSA encryption
- *     metadata: hash of password string using the DES-based crypt function
+ *     metadata: hash of password string using the SHA1 hash function
  *
  * All RSA keys are hard-coded into the source code of encrypt, so to maintain
  * security you should compile, then encrypt the source file encrypt.c
