@@ -1,6 +1,7 @@
 #include "encrypt.h"
 #include "far.h"
 #include "lzw.h"
+#include "rsa.h"
 #include <libgen.h>
 #include <ctype.h>
 
@@ -88,6 +89,7 @@ int main(int argc, char** argv)
 
     if (decrypt)
     {
+        decryptRSA(password, archiveName, archiveLZW);
         decode(archiveLZW, archiveFar);
         extract(archiveFar);
     }
@@ -95,6 +97,7 @@ int main(int argc, char** argv)
     {
         archive(archiveFar, argc-flagIndex-1, argv+flagIndex+1);
         encode(archiveFar, archiveLZW);
+        encryptRSA(password, archiveLZW, archiveName);
     }
     
     if (showPassword) free(password);

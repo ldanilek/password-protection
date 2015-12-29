@@ -143,6 +143,7 @@ void extract(char* archiveName)
                 fputc(c, file);
             }
             if (fclose(file)) SYS_ERROR("fclose");
+            if (chmod(nodeName, mode)) SYS_ERROR("chmod");
         }
     }
 

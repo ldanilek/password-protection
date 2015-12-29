@@ -2,6 +2,20 @@ import random
 import math
 
 # generates RSA keys
+# stores these keys in the keys.h file
+
+f = open("keys.h", "w")
+
+BYTE_GROUP = 4
+BASE = 1<<(BYTE_GROUP*8)
+
+def writeDefinitions(name, number):
+    parts = []
+    while number > 0:
+        parts.append(str(number % BASE))
+        number /= BASE
+    f.write("#define "+name+"_SIZE ("+str(len(parts))+")\n")
+    f.write("#define "+name+"_DATA {"+", ".join(parts)+"}\n")
 
 # reference: https://www.daniweb.com/programming/software-development/code/216880/check-if-a-number-is-a-prime-number-python
 def isPrime(n,PROB):
@@ -30,12 +44,12 @@ def isPrime(n,PROB):
 
 assurance = 100
 
-pBits = 1000
+pBits = 100
 p = random.getrandbits(pBits)
 while not isPrime(p, assurance):
     p = random.getrandbits(pBits)
 
-qBits = 1010
+qBits = 110
 q = random.getrandbits(qBits)
 while not isPrime(q, assurance):
     q = random.getrandbits(qBits)
@@ -44,17 +58,17 @@ n = p * q
 # phi(n) = phi(p)*phi(q) = (p-1)(q-1) = pq-p-q+1
 totientN = n - p - q + 1
 
-print n
+writeDefinitions("N", n)
 
 # e and phi(n) must be coprime
 # specifically, e can be prime
 # e should also be reasonably small
-maxE = min(2**20, totientN-1)
-e = random.randint(2, maxE)
+maxE = min(2**16, totientN-1)
+e = random.randint(5, maxE)
 while not isPrime(e, assurance):
     e = random.randint(2, maxE)
 
-print e
+writeDefinitions("E", e)
 
 # from wikipedia extended euclidean algorithm
 def bezoutCoefficient(a, b):
@@ -72,5 +86,6 @@ d = bezoutCoefficient(e, totientN)
 while d < 0:
     d += totientN
 
-print d
+writeDefinitions("D", d)
 
+f.close()

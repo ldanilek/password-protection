@@ -3,17 +3,23 @@ Archives, compresses, and password-protects a list of files and directories from
 
 Uses techniques from problem sets in Yale's CS323 (Far and LZW), Harvard's CS50 (Crypto), and Dartmouth's CS1 (Public-key cryptography)
 
-# Still in development. Do not use until finalized
+# Warning label: still in development. Do not use until finalized
+
+## Assumptions
+
+Security of this program is based on the following assumptions:
+
+* Decompiling a C executable to discover numerical literals (RSA keys) is hard
+* DES hashing is non-invertible
+* RSA encryption isn't invertible without the keys
 
 # To Use
 
 ## Initial setup
 
-* In the command line, run ```python keygenerator.py```
-* Copy the output into the constants at the top of encrypt.c. This will personalize your encryption system
-* Run ```make```
-* Run ```make``` on all computers for which you want to encrypt or decrypt.
-* Encrypt or remove the file encrypt.c
+* In the command line, run ```python keygenerator.py```. This will personalize your encryption system by writing random RSA keys to the keys.h file.
+* Run ```make``` - repeat with the same keys.h on all computers for which you want to encrypt or decrypt.
+* Encrypt or remove the file keys.h - this is critical for security
 * Optional: move encrypt and decrypt to a directory in your $PATH variable
 
 ## Everyday Use
