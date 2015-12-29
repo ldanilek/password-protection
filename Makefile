@@ -2,7 +2,7 @@
 CC = clang
 
 # flags to pass compiler
-CFLAGS = -ggdb3 -O0 -Qunused-arguments -std=c11 -Wall -Werror
+CFLAGS = -ggdb3 -O0 -Qunused-arguments -std=c11 -Wall -Werror -DENCRYPT
 
 # name for executable
 EXE = encrypt
@@ -30,7 +30,7 @@ all: encrypt decrypt
 
 # main target
 $(EXE): $(OBJS) $(HDRS) Makefile
-	$(CC) $(CFLAGS) -DENCRYPT -o $@ $(OBJS) $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIBS)
 
 compression: compress decompress
 
