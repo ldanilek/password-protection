@@ -2,3 +2,5 @@
 encrypt
 decrypt
 keys.h
+compress
+decompress

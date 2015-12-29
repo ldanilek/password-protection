@@ -50,4 +50,4 @@ $(OBJS): $(HDRS) Makefile
 
 # housekeeping
 clean:
-	rm -f core $(EXE) *.o decrypt
+	rm -f core $(EXE) *.o decrypt compress decompress

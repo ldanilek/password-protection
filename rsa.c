@@ -361,7 +361,7 @@ void decryptRSA(char* password, char* inputName, char* outputName)
             PROGRESS_PART("*");
         }
     }
-    PROGRESS_PART("\n");
+    PROGRESS_PART("*\n");
 
     if (fclose(inFile)) SYS_ERROR("fclose");
     if (fclose(outFile)) SYS_ERROR("fclose");
