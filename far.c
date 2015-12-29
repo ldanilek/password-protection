@@ -7,6 +7,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 /**
  * Given archive open for writing and path to inode, copy node into archive
@@ -19,6 +20,12 @@ void archiveNode(FILE* archive, char* node)
     struct stat nodeData;
     if (lstat(node, &nodeData)) SYS_ERR_DONE("lstat");
     mode_t mode = nodeData.st_mode;
+    // store these so they can be restored
+    struct timeval times[2];
+    TIMESPEC_TO_TIMEVAL(times, &nodeData.st_atimespec);
+    TIMESPEC_TO_TIMEVAL(times+1, &nodeData.st_mtimespec);
+    u_long flags = nodeData.st_flags;
+
     if (S_ISDIR(mode))
     {
         // append a / to make sure it's extracted as a directory
@@ -34,6 +41,10 @@ void archiveNode(FILE* archive, char* node)
     if (fwrite(node, sizeof(char), nodeLen, archive)<nodeLen) SYS_DIE("fwrite");
     // write the mode of this node
     if (fwrite(&mode, sizeof(mode), 1, archive)<1) SYS_DIE("fwrite");
+    // write the times and flags of this node
+    if (fwrite(times, sizeof(struct timeval), 2, archive)<2) SYS_DIE("fwrite");
+    if (fwrite(&flags, sizeof(flags), 1, archive)<1) SYS_DIE("fwrite");
+
     if (S_ISDIR(mode))
     {
         node[--nodeLen] = '\0';
@@ -113,6 +124,12 @@ void extract(char* archiveName)
         mode_t mode;
         if (fread(&mode, sizeof(mode), 1, archive) < 1)
             DIE("%s", "Unable to read mode");
+        struct timeval times[2];
+        if (fread(times, sizeof(struct timeval), 2, archive) < 2)
+            DIE("%s", "Unable to read timevals");
+        u_long flags;
+        if (fread(&flags, sizeof(flags), 1, archive) < 1)
+            DIE("%s", "Unable to read flags");
         // extract all prefix directories
         bool errorExtractingParents = false;
         for (int i=0; i < nodeNameLen; i++)
@@ -146,7 +163,10 @@ void extract(char* archiveName)
                 fputc(c, file);
             }
             if (fclose(file)) SYS_ERROR("fclose");
-            if (chmod(nodeName, mode)) SYS_ERROR("chmod");
+            if (lchmod(nodeName, mode)) SYS_ERROR("chmod");
+            if (utimes(nodeName, times)) SYS_ERROR("utimes");
+            if (chflags(nodeName, flags)) SYS_ERROR("chflags");
+            // check setattrlist(2)
         }
     }
 
