@@ -26,6 +26,10 @@ bool verbose = false;
 // remove original files (listed files on encrypt, archive on decrypt)
 bool removeOriginal = false;
 
+// only owner has permission for the archive
+// it can be read or (over)written
+#define ARCHIVE_PERMISSION (0600)
+
 void protect(char* password, char* archiveName, int nodeC, char** nodes)
 {
     int archiveToEncodePipe[2];
@@ -43,7 +47,7 @@ void protect(char* password, char* archiveName, int nodeC, char** nodes)
     // parent process
     if (close(archiveToEncodePipe[1])) SYS_DIE("close");
 
-    int newFile = open(archiveName, O_WRONLY|O_CREAT|O_TRUNC);
+    int newFile = open(archiveName,O_WRONLY|O_CREAT|O_TRUNC,ARCHIVE_PERMISSION);
     if (newFile < 0) SYS_DIE("open");
 
     int encodeToEncryptPipe[2];
@@ -79,8 +83,8 @@ void protect(char* password, char* archiveName, int nodeC, char** nodes)
     if (waitpid(archiveProcess, &archiveStatus, 0) < 0) SYS_DIE("waitpid");
     int encodeStatus = 0;
     if (waitpid(encodeProcess, &encodeStatus, 0) < 0) SYS_DIE("waitpid");
-
-    if (encodeStatus || archiveStatus)
+    
+    if (encodeStatus)
     {
         // something got fucked up. very likely encodeStatus is UNCOMPRESSABLE,
         // but even if it isn't just treat it like it is.
@@ -110,7 +114,6 @@ void protect(char* password, char* archiveName, int nodeC, char** nodes)
 
         if (close(newFile)) SYS_DIE("close");
     }
-    if (removeOriginal && remove(archiveName)) SYS_ERROR("remove");
 }
 
 void unprotect(char* password, char* archiveName)
@@ -167,6 +170,8 @@ void unprotect(char* password, char* archiveName)
 #endif
     if (waitpid(decodeProcess, &status, 0) < 0) SYS_DIE("waitpid");
     if (status) DIE("decodeProcess exit status %d", STAT(status));
+
+    if (removeOriginal && remove(archiveName)) SYS_ERROR("remove");
 }
 
 // in sequence. significantly slower, but progress statements make more sense
