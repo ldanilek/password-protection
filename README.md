@@ -75,3 +75,5 @@ Listed are a few constants you can change to trade security for speed.
 Still on the list of things to do:
 
 * Salt the encryption so the same message is encrypted to different data
+* Encode each archived file separately
+* Obscure the secret key inside the executable
