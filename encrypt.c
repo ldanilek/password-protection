@@ -174,10 +174,13 @@ void protectS(char* password, char* archiveName, char* archiveFar,
     char* archiveLZW, int nodeC, char** nodes)
 {
     FILE* far = fopen(archiveFar, "w");
+    if (!far) SYS_DIE("fopen");
     archive(fileno(far), nodeC, nodes);
-    fclose(far);
+    if (fclose(far)) SYS_ERROR("fclose");
     far = fopen(archiveFar, "r");
+    if (!far) SYS_DIE("fopen");
     FILE* lzw = fopen(archiveLZW, "w");
+    if (!lzw) SYS_DIE("fopen");
 
     // this might exit(UNCOMPRESSABLE), so do in subprocess
     pid_t encodeProcess = fork();
@@ -189,8 +192,8 @@ void protectS(char* password, char* archiveName, char* archiveFar,
     }
     int status = 0;
     if (waitpid(encodeProcess, &status, 0) < 0) SYS_DIE("waitpid");
-    fclose(far);
-    fclose(lzw);
+    if (fclose(far)) SYS_ERROR("fclose");
+    if (fclose(lzw)) SYS_ERROR("fclose");
     if (status)
     {
         if (rename(archiveFar, archiveLZW)) SYS_DIE("rename");
@@ -199,10 +202,12 @@ void protectS(char* password, char* archiveName, char* archiveFar,
     
 #ifdef ENCRYPT
     lzw = fopen(archiveLZW, "r");
+    if (!lzw) SYS_DIE("fopen");
     FILE* arch = fopen(archiveName, "w");
+    if (!arch) SYS_DIE("fopen");
     encryptRSA(password, fileno(lzw), fileno(arch));
-    fclose(arch);
-    fclose(lzw);
+    if (fclose(arch)) SYS_ERROR("fclose");
+    if (fclose(lzw)) SYS_ERROR("fclose");
     if (remove(archiveLZW)) SYS_ERROR("remove");
 #else
     if (rename(archiveLZW, archiveName)) SYS_DIE("rename");
@@ -212,12 +217,16 @@ void protectS(char* password, char* archiveName, char* archiveFar,
 void unprotectS(char* password, char* archiveName, char* archiveFar,
     char* archiveLZW)
 {
+    FILE* lzw;
 #ifdef ENCRYPT
     FILE* arch = fopen(archiveName, "r");
-    FILE* lzw = fopen(archiveLZW, "w");
+    if (!arch) SYS_DIE("fopen");
+    lzw = fopen(archiveLZW, "w");
+    if (!lzw) SYS_DIE("fopen");
     decryptRSA(password, fileno(arch), fileno(lzw));
-    fclose(arch);
-    fclose(lzw);
+    if (fclose(arch)) SYS_ERROR("fclose");
+    if (removeOriginal && remove(archiveName)) SYS_ERROR("remove");
+    if (fclose(lzw)) SYS_ERROR("fclose");
 #else
     if (removeOriginal)
     {
@@ -227,8 +236,8 @@ void unprotectS(char* password, char* archiveName, char* archiveFar,
     {
         // copy it over
         FILE* archive = fopen(archiveName, "r");
-        FILE* lzw = fopen(archiveLZW, "w");
         if (!archive) SYS_DIE("fopen");
+        lzw = fopen(archiveLZW, "w");
         if (!lzw) SYS_DIE("fopen");
         int c;
         while ((c = fgetc(archive)) != EOF) fputc(c, lzw);
@@ -237,13 +246,18 @@ void unprotectS(char* password, char* archiveName, char* archiveFar,
     }
 #endif
     lzw = fopen(archiveLZW, "r");
+    if (!lzw) SYS_DIE("fopen");
     FILE* far = fopen(archiveFar, "w");
+    if (!far) SYS_DIE("far");
     decode(fileno(lzw), fileno(far));
-    fclose(lzw);
-    fclose(far);
+    if (fclose(lzw)) SYS_ERROR("fclose");
+    if (fclose(far)) SYS_ERROR("fclose");
+    if (remove(archiveLZW)) SYS_ERROR("remove");
     far = fopen(archiveFar, "r");
+    if (!far) SYS_DIE("fopen");
     extract(fileno(far));
-    fclose(far);
+    if (fclose(far)) SYS_ERROR("fclose");
+    if (remove(archiveFar)) SYS_ERROR("remove");
 }
 
 
@@ -252,11 +266,11 @@ int main(int argc, char** argv)
     // find which program to run
     bool decrypt;
     char* progName = basename(argv[0]);
-    if (!strcmp(progName, "encrypt") || !strcmp(progName, "compress"))
+    if (!strcmp(progName, "encrypt") || !strcmp(progName, "lzwcompress"))
     {
         decrypt = false;
     }
-    else if (!strcmp(progName, "decrypt") || !strcmp(progName, "decompress"))
+    else if (!strcmp(progName, "decrypt") || !strcmp(progName, "lzwdecompress"))
     {
         decrypt = true;
     }
@@ -294,7 +308,7 @@ int main(int argc, char** argv)
     if (!decrypt && argc-flagIndex < 2) DIE("Invalid encrypt argc: %d", argc);
 
     // take password as input
-    char* password;
+    char* password = "";
 #ifdef ENCRYPT
 #if MAC
     if (showPassword)

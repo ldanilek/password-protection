@@ -34,13 +34,15 @@ all: encrypt decrypt
 $(EXE): $(OBJS) $(HDRS) Makefile
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIBS)
 
-compression: compress decompress
+compression: lzwcompress lzwdecompress
+	cp lzwcompress /usr/local/bin/lzwcompress
+	cp lzwdecompress /usr/local/bin/lzwdecompress
 
-compress: $(C_OBJS) $(C_HDRS) Makefile
+lzwcompress: $(C_OBJS) $(C_HDRS) Makefile
 	$(CC) $(CFLAGS) -o $@ $(C_OBJS)
 
-decompress: compress
-	ln -f compress decompress
+lzwdecompress: lzwcompress
+	ln -f lzwcompress lzwdecompress
 
 decrypt: $(EXE)
 	ln -f $(EXE) decrypt
@@ -60,4 +62,4 @@ $(OBJS): $(HDRS) Makefile
 
 # housekeeping
 clean:
-	rm -f core $(EXE) *.o decrypt compress decompress
+	rm -f core $(EXE) *.o decrypt lzwcompress lzwdecompress

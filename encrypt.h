@@ -26,13 +26,14 @@
  *
  * Flags may be separated or condensed, so -pq and -pv -q are both valid
  * 
- * the following filenames must be unused (files will be overwritten),
- * where ArchiveName is the command line argument:
+ * In series mode, the following filenames must be unused
+ * (files will be overwritten), where ArchiveName is the command line argument:
  * ArchiveName.far
  * ArchiveName.lzw
  * ArchiveName
  * On decrypt, all files to extract will be overwritten,
  * and ArchiveName is required to exist and be readable
+ * In parallel mode, only ArchiveName itself will be used.
  *
  * ArchiveName may not begin with a hyphen, but it may be any writable path
  * Therefore ./-name is a valid workaround
@@ -51,8 +52,8 @@
  *     metadata: hash of password string using the SHA1 hash function
  *
  * All RSA keys are hard-coded into the source code of encrypt, so to maintain
- * security you should compile, then encrypt the source file encrypt.c
- * If portability isn't a problem, you can remove encrypt.c after compiling
+ * security you should compile, then encrypt the source file keys.h
+ * If portability isn't a problem, you can remove keys.h after compiling
  */
 
 #ifndef ENCRYPT_H

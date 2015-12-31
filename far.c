@@ -70,7 +70,7 @@ void archiveNode(int archive, char* node)
             if (!strcmp(subnode->d_name, ".") || !strcmp(subnode->d_name, ".."))
                 continue;
 #if MAC
-            int nameLen = subnode->d_namlen
+            int nameLen = subnode->d_namlen;
 #else
             int nameLen = strlen(subnode->d_name);
 #endif

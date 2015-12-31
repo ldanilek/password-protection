@@ -5,7 +5,7 @@ Uses techniques from problem sets across multiple schools:
 
 * Yale's CS323
     * Far for the archiving of multiple files and directories into one file
-    * LZW for the compression of that file
+    * LZW for the compression of that file, and using two names for the same program
     * Bsh for the multiprocessing of the three stages and piping between them
 * Harvard's CS50
     * Crypto for the salted hashing of passwords
@@ -17,6 +17,8 @@ Uses techniques from problem sets across multiple schools:
 ## Initial setup
 
 Clone or download the Github repository.
+
+If your machine runs linux, you may need to replace the ```#define MAC 1``` in encrypt.h with ```#define MAC 0``` which reduces the possible features but allows it to compile.
 
 If you can [install GMP](https://gmplib.org) and Openssl (I used the command ```brew install openssl; brew link openssl --force```), please do so. If you cannot, skip to the Compression-only section below.
 
@@ -42,12 +44,11 @@ This mode does not require GMP or openssl (the only nonstandard libraries used).
 
 1. Remove -DENCRYPT from line 1 of Makefile, so it reads ```DEFS =```
 2. Run ```make compression```
-3. Optional: move the executables compress and decompress to a directory in your $PATH variable
 
 ## Everyday use
 
-* ```compress flags ArchiveName File1 File2 ...```
-* ```decompress flags ArchiveName```
+* ```lzwcompress flags ArchiveName File1 File2 ...```
+* ```lzwdecompress flags ArchiveName```
 
 See encrypt.h for description of flags and restrictions. In compression-only mode, the -s flag is not allowed.
 
