@@ -152,7 +152,7 @@ void encode(int inFile, int outFile)
         if (!lookup)
         {
             if (!whereIsC) DIE("%s", "corrupted file");
-            whereIsC->elt.frequency++;
+
             putBits(numBits, C, outFile);
             bitsWritten += numBits;
             //checkTable(table);
@@ -198,6 +198,7 @@ void encode(int inFile, int outFile)
         }
         C = lookup->elt.CODE;
         whereIsC = lookup;
+        whereIsC->elt.frequency++;
 
         /*
         // current percentage read
@@ -312,15 +313,11 @@ void decode(int inFile, int outFile)
             pushStack(stack, finalK);
             C = oldC;
         }
-        else
-        {
-            // increase frequency of this code
-            ArrayElement* elt = searchArray(table, C);
-            elt->frequency++;
-        }
         //checkArray(table);
         while (ARRAYPREF(C))
         {
+            ArrayElement* elt = searchArray(table, C);
+            elt->frequency++;
             pushStack(stack, ARRAYCHAR(C));
             C = ARRAYPREF(C);
         }
