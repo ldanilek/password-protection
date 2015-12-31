@@ -4,7 +4,7 @@ DEFS = -DENCRYPT
 CC = gcc
 
 # flags to pass compiler
-CFLAGS = -O3 -std=c99 -Wall -Werror $(DEFS)
+CFLAGS = -O3 -std=c99 -Wall -Werror -I/usr/local/include $(DEFS)
 
 # name for executable
 EXE = encrypt
@@ -32,7 +32,7 @@ all: encrypt decrypt
 
 # main target
 $(EXE): $(OBJS) $(HDRS) Makefile
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIBS)
+	$(CC) $(CFLAGS) -L/usr/local/lib -o $@ $(OBJS) $(LIBS)
 
 compression: lzwcompress lzwdecompress
 	cp lzwcompress /usr/local/bin/lzwcompress
@@ -53,6 +53,14 @@ keys:
 link: encrypt decrypt
 	cp encrypt /usr/local/bin/encrypt
 	cp decrypt /usr/local/bin/decrypt
+
+gmp:
+	brew install gmp
+	brew link gmp --force
+
+openssl:
+	brew install openssl
+	brew link openssl --force
 
 install: keys link
 	rm -f keys.h

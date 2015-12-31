@@ -20,7 +20,7 @@ Clone or download the Github repository.
 
 If your machine runs linux, you may need to replace the ```#define MAC 1``` in encrypt.h with ```#define MAC 0``` which reduces the possible features but allows it to compile.
 
-If you can [install GMP](https://gmplib.org) (try ```brew install gmp```) and Openssl (I used the command ```brew install openssl; brew link openssl --force```), please do so. If you cannot, skip to the Compression-only section below.
+If you can [install GMP](https://gmplib.org) (```make gmp```) and Openssl (```make openssl```), please do so. If you cannot, skip to the Compression-only section below.
 
 If you only want to install on one computer, simply run ```make install```. Otherwise, follow these instructions:
 
