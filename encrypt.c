@@ -75,11 +75,42 @@ void protect(char* password, char* archiveName, int nodeC, char** nodes)
 #endif
     // wait for child processes to end
     // (if encrypt ran, they've already ended, but should still reap them)
-    int status = 0;
-    if (waitpid(archiveProcess, &status, 0) < 0) SYS_DIE("waitpid");
-    if (status) DIE("archiveProcess exit status %d", STAT(status));
-    if (waitpid(encodeProcess, &status, 0) < 0) SYS_DIE("waitpid");
-    if (status) DIE("encodeProcess exit status %d", STAT(status));
+    int archiveStatus = 0;
+    if (waitpid(archiveProcess, &archiveStatus, 0) < 0) SYS_DIE("waitpid");
+    int encodeStatus = 0;
+    if (waitpid(encodeProcess, &encodeStatus, 0) < 0) SYS_DIE("waitpid");
+
+    if (encodeStatus || archiveStatus)
+    {
+        // something got fucked up. very likely encodeStatus is UNCOMPRESSABLE,
+        // but even if it isn't just treat it like it is.
+        newFile = open(archiveName, O_WRONLY|O_CREAT|O_TRUNC);
+        if (newFile < 0) SYS_DIE("open");
+
+#ifdef ENCRYPT
+        int archiveToEncryptPipe[2];
+        if (pipe(archiveToEncryptPipe)) SYS_DIE("pipe");
+
+        archiveProcess = fork();
+        if (archiveProcess < 0) SYS_DIE("fork");
+        if (archiveProcess == 0)
+        {
+            if (close(archiveToEncryptPipe[0])) SYS_DIE("close");
+            archive(archiveToEncryptPipe[1], nodeC, nodes);
+            exit(0);
+        }
+        if (close(archiveToEncryptPipe[1])) SYS_DIE("close");
+        encryptRSA(password, archiveToEncryptPipe[0], newFile);
+        if (close(archiveToEncryptPipe[0])) SYS_DIE("close");
+        archiveStatus = 0;
+        if (waitpid(archiveProcess, &archiveStatus, 0) < 0) SYS_DIE("waitpid");
+#else
+        archive(newFile, nodeC, nodes);
+#endif
+
+        if (close(newFile)) SYS_DIE("close");
+    }
+    if (removeOriginal && remove(archiveName)) SYS_ERROR("remove");
 }
 
 void unprotect(char* password, char* archiveName)
@@ -138,6 +169,7 @@ void unprotect(char* password, char* archiveName)
     if (status) DIE("decodeProcess exit status %d", STAT(status));
 }
 
+// in sequence. significantly slower, but progress statements make more sense
 void protectS(char* password, char* archiveName, char* archiveFar,
     char* archiveLZW, int nodeC, char** nodes)
 {
@@ -146,15 +178,32 @@ void protectS(char* password, char* archiveName, char* archiveFar,
     fclose(far);
     far = fopen(archiveFar, "r");
     FILE* lzw = fopen(archiveLZW, "w");
-    encode(fileno(far), fileno(lzw));
+
+    // this might exit(UNCOMPRESSABLE), so do in subprocess
+    pid_t encodeProcess = fork();
+    if (encodeProcess < 0) SYS_DIE("fork");
+    if (encodeProcess == 0)
+    {
+        encode(fileno(far), fileno(lzw));
+        exit(0);
+    }
+    int status = 0;
+    if (waitpid(encodeProcess, &status, 0) < 0) SYS_DIE("waitpid");
     fclose(far);
     fclose(lzw);
+    if (status)
+    {
+        if (rename(archiveFar, archiveLZW)) SYS_DIE("rename");
+    }
+    else if (remove(archiveFar)) SYS_ERROR("remove");
+    
 #ifdef ENCRYPT
     lzw = fopen(archiveLZW, "r");
     FILE* arch = fopen(archiveName, "w");
     encryptRSA(password, fileno(lzw), fileno(arch));
     fclose(arch);
     fclose(lzw);
+    if (remove(archiveLZW)) SYS_ERROR("remove");
 #else
     if (rename(archiveLZW, archiveName)) SYS_DIE("rename");
 #endif
