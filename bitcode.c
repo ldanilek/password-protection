@@ -29,6 +29,38 @@ int fdgetc(int fd)
     return character;
 }
 
+bool rdhang(int fd, void* bytes, int len)
+{
+    if (len == 0) return true;
+    int lengthRead = 0;
+    int totalRead = 0;
+    while (len > 0 && (lengthRead = read(fd, bytes + totalRead, len)) > 0)
+    {
+        len -= lengthRead;
+        totalRead += lengthRead;
+    }
+    if (lengthRead < 0) SYS_DIE("read"); // read had an error
+    if (lengthRead == 0 && len > 0 && totalRead > 0)
+    {
+        // hit EOF; read in some but not all
+        DIE("%d spare bytes", totalRead);
+    }
+    return len == 0; // return whether everything was read
+}
+
+int rdhangPartial(int fd, void* bytes, int len)
+{
+    if (len == 0) return true;
+    int lengthRead = 0;
+    int totalRead = 0;
+    while (len > 0 && (lengthRead = read(fd, bytes + totalRead, len)) > 0)
+    {
+        len -= lengthRead;
+        totalRead += lengthRead;
+    }
+    if (lengthRead < 0) SYS_DIE("read"); // read had an error
+    return totalRead; // return whether everything was read
+}
 
 // == PUTBITS MODULE =======================================================
 

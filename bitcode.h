@@ -4,6 +4,7 @@
 
 #include <limits.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 // Write code (#bits = nBits) to standard output.
 // [Since bits are written as CHAR_BIT-bit characters, any extra bits are
@@ -20,3 +21,14 @@ int getBits (int nBits, int fd);
 // does not cache, so is slow
 void fdputc(char c, int fd);
 int fdgetc(int fd);
+
+// version of read that works how I want it to work
+// returns bool of whether it read in the bytes. 
+// all-or-nothing read. if only partially read before EOF, DIEs
+// useful when reading from a fixed-format file, so I know what size the data
+// should be
+bool rdhang(int fd, void* bytes, int len);
+
+// same as above but allows partial reads and returns the number of bytes read
+// different from read() because will only stop at EOF (not end of pipe)
+int rdhangPartial(int fd, void* bytes, int len);

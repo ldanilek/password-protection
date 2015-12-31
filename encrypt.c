@@ -43,7 +43,7 @@ void protect(char* password, char* archiveName, int nodeC, char** nodes)
     // parent process
     if (close(archiveToEncodePipe[1])) SYS_DIE("close");
 
-    int newFile = open(archiveName, O_WRONLY|O_APPEND|O_CREAT|O_TRUNC);
+    int newFile = open(archiveName, O_WRONLY|O_CREAT|O_TRUNC);
     if (newFile < 0) SYS_DIE("open");
 
     int encodeToEncryptPipe[2];

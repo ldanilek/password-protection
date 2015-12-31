@@ -127,24 +127,23 @@ void extract(int archive)
 
     int nodeNameLen;
     int lenSize = sizeof(nodeNameLen);
-    int lenRead = 0;
-    while ((lenRead = read(archive, &nodeNameLen, lenSize)) == lenSize)
+    while (rdhang(archive, &nodeNameLen, lenSize))
     {
         char nodeName[nodeNameLen + 1];
-        if (read(archive, nodeName, nodeNameLen) < nodeNameLen)
+        if (!rdhang(archive, nodeName, nodeNameLen))
             SYS_DIE("Unable to read name");
         nodeName[nodeNameLen] = '\0';
         PROGRESS("Extracting node %s", nodeName);
         mode_t mode;
-        if (read(archive, &mode, sizeof(mode)) < sizeof(mode))
+        if (!rdhang(archive, &mode, sizeof(mode)))
             SYS_DIE("Unable to read mode");
 #if MAC
         struct timeval times[2];
         int timeSize = sizeof(struct timeval) * 2;
-        if (read(archive, times, timeSize) < timeSize)
+        if (!rdhang(archive, times, timeSize))
             SYS_DIE("Unable to read timevals");
         u_long flags;
-        if (read(archive, &flags, sizeof(flags)) < sizeof(flags))
+        if (!rdhang(archive, &flags, sizeof(flags)))
             SYS_DIE("Unable to read flags");
 #endif
         // extract all prefix directories
@@ -170,7 +169,7 @@ void extract(int archive)
             // directories should be already taken care of
             // this is a regular file
             off_t size;
-            if (read(archive, &size, sizeof(size)) < sizeof(size))
+            if (!rdhang(archive, &size, sizeof(size)))
                 DIE("%s", "Unable to read size");
             FILE* file = fopen(nodeName, "w");
             for (off_t i=0; i<size; i++)
@@ -188,7 +187,6 @@ void extract(int archive)
             // check setattrlist(2)
         }
     }
-    if (lenRead) DIE("extra bytes in archive: %d", lenRead);
 
     STATUS("%s", "Extraction complete");
 }

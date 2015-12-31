@@ -130,7 +130,7 @@ bigint makeMessage(int inFile, int goal, int* totalBytes, bool* reachedEOF)
     message.digits = calloc(sizeof(unsigned int), message.capacity);
     unsigned char bytes[BYTE_GROUP];
     int bytesRead;
-    while ((bytesRead = read(inFile, bytes, BYTE_GROUP)) > 0)
+    while ((bytesRead = rdhangPartial(inFile, bytes, BYTE_GROUP)) > 0)
     {
         *totalBytes += bytesRead;
         for (int i = BYTE_GROUP-1; i >= bytesRead; i--) bytes[i] = 0;
@@ -318,7 +318,7 @@ void decryptRSA(char* password, int inFile, int outFile)
     if (!outFile) SYS_DIE("fopen");
     */
     unsigned char hash[HASH_LEN];
-    if (read(inFile, hash, HASH_LEN) < HASH_LEN) SYS_DIE("fread");
+    if (!rdhang(inFile, hash, HASH_LEN)) DIE("%s", "EOF at start");
     checkPassword(password, hash);
 
     bigint d;
@@ -335,12 +335,12 @@ void decryptRSA(char* password, int inFile, int outFile)
     int bytesWritten = 0;
     //int lastPercent = -1;
     int readLen;
-    while (read(inFile, &readLen, sizeof(readLen)) > 0)
+    while (rdhang(inFile, &readLen, sizeof(readLen)))
     {
         partialProgress += sizeof(readLen);
         //PROGRESS("%s", "Fetching ciphertext");
         int writeLen;
-        if (read(inFile, &writeLen, sizeof(writeLen))<sizeof(writeLen))
+        if (!rdhang(inFile, &writeLen, sizeof(writeLen)))
             DIE("%s","corrupt");
         partialProgress += sizeof(writeLen);
         bigint c;
@@ -349,7 +349,7 @@ void decryptRSA(char* password, int inFile, int outFile)
         c.digits = calloc(readLen, usize);
         for (int i = 0; i < readLen; i++)
         {
-            if (read(inFile, c.digits+i, usize)<usize) DIE("%s","corrupt");
+            if (!rdhang(inFile, c.digits+i, usize)) DIE("%s","corrupt");
         }
         partialProgress += usize * readLen;
         //PROGRESS("%s", "Decrypting cyphertext");

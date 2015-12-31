@@ -21,7 +21,7 @@
  *       password is correct).
  *
  * -s    Series mode. Executes the three parts of the program in sequence on
- *       one thread. 
+ *       one thread. Default is parallel mode.
  *
  * Flags may be separated or condensed, so -pq and -pv -q are both valid
  * 
@@ -69,12 +69,12 @@ extern bool removeOriginal;
 #define EXIT_FAILURE 1
 
 // use for major status changes and minor errors
-#define STATUS(format,...) if(!quiet)fprintf(stdout,format "\n",__VA_ARGS__)
+#define STATUS(format,...) if(!quiet)fprintf(stderr,format "\n",__VA_ARGS__)
 // use for minor progress reports
-#define PROGRESS(format,...) if(verbose)fprintf(stdout,format "\n",__VA_ARGS__)
+#define PROGRESS(format,...) if(verbose)fprintf(stderr,format "\n",__VA_ARGS__)
 
 // no newline, string literal, and fflushes
-#define PROGRESS_PART(format) if(verbose)fprintf(stdout,format),fflush(stdout)
+#define PROGRESS_PART(format) if(verbose)fprintf(stderr,format),fflush(stdout)
 
 // Write message to stderr using format FORMAT
 #define WARN(format,...) fprintf (stderr, format "\n", __VA_ARGS__)
