@@ -1,7 +1,16 @@
 # password-protection
 Archives, compresses, and password-protects a list of files and directories from the command line.
 
-Uses techniques from problem sets in Yale's CS323 (Far and LZW), Harvard's CS50 (Crypto), and Dartmouth's CS1 (Public-key cryptography)
+Uses techniques from problem sets across multiple schools:
+
+* Yale's CS323
+    * Far for the archiving of multiple files and directories into one file
+    * LZW for the compression of that file
+    * Bsh for the multiprocessing of the three stages and piping between them
+* Harvard's CS50
+    * Crypto for the salted hashing of passwords
+* Dartmouth's CS1
+    * Public-key cryptography for the RSA encryption
 
 # To Use
 

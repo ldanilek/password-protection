@@ -20,8 +20,9 @@
  *       archives them. On decrypt, this removes the archive file (if 
  *       password is correct).
  *
- * -s    Series mode. Executes the three parts of the program in sequence on
- *       one thread. Default is parallel mode.
+ * -s    Series mode. Executes the three parts of the program in sequence.
+ *       Uses fewer processes and file descriptors. Default is parallel mode,
+ *       which is almost always faster but status logs are more confusing.
  *
  * Flags may be separated or condensed, so -pq and -pv -q are both valid
  * 
