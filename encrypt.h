@@ -62,7 +62,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define MAC 1
+#define MAC 0
 
 extern bool quiet;
 extern bool verbose;
