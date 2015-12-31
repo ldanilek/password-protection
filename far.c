@@ -172,18 +172,22 @@ void extract(int archive)
             if (!rdhang(archive, &size, sizeof(size)))
                 DIE("%s", "Unable to read size");
             FILE* file = fopen(nodeName, "w");
+            if (!file) SYS_ERROR("fopen"); // permissions error
             for (off_t i=0; i<size; i++)
             {
                 int c = fdgetc(archive);
                 if (c == EOF) DIE("%s", "File ended unexpectedly");
-                fputc(c, file);
+                if (file) fputc(c, file);
             }
-            if (fclose(file)) SYS_ERROR("fclose");
-            if (chmod(nodeName, mode)) SYS_ERROR("chmod");
+            if (file)
+            {
+                if (fclose(file)) SYS_ERROR("fclose");
+                if (chmod(nodeName, mode)) SYS_ERROR("chmod");
 #if MAC
-            if (chflags(nodeName, flags)) SYS_ERROR("chflags");
-            if (utimes(nodeName, times)) SYS_ERROR("utimes");
+                if (chflags(nodeName, flags))SYS_ERROR("chflags");
+                if (utimes(nodeName, times)) SYS_ERROR("utimes");
 #endif
+            }
             // check setattrlist(2)
         }
     }
