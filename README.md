@@ -1,7 +1,7 @@
 # password-protection
 Archives, compresses, and password-protects a list of files and directories from the command line.
 
-Uses techniques from problem sets across multiple schools:
+Uses techniques from problem sets across multiple universities:
 
 * Yale's CS323
     * Far for the archiving of multiple files and directories into one file
@@ -75,6 +75,3 @@ Listed are a few constants you can change to trade security for speed.
 Still on the list of things to do:
 
 * Salt the encryption so the same message is encrypted to different data
-* Use multiprocessing with piping between the three stages of the program: archive - compress - encrypt
-    * This actually shouldn't be that bad, but the status messages get more complicated and the LZW short-circuit would be hard. 
-    * Possibly could use multiple pipes for communication across processes
