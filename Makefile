@@ -1,10 +1,10 @@
 DEFS = -DENCRYPT
 
 # compiler to use
-CC = clang
+CC = gcc
 
 # flags to pass compiler
-CFLAGS = -ggdb3 -O0 -Qunused-arguments -std=c11 -Wall -Werror $(DEFS)
+CFLAGS = -O0 -ggdb3 -std=c99 -Wall -Werror $(DEFS)
 
 # name for executable
 EXE = encrypt

@@ -20,6 +20,9 @@
  *       archives them. On decrypt, this removes the archive file (if 
  *       password is correct).
  *
+ * -s    Series mode. Executes the three parts of the program in sequence on
+ *       one thread. 
+ *
  * Flags may be separated or condensed, so -pq and -pv -q are both valid
  * 
  * the following filenames must be unused (files will be overwritten),
@@ -56,6 +59,8 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+
+#define MAC 0
 
 extern bool quiet;
 extern bool verbose;

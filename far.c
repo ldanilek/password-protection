@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "far.h"
 #include "encrypt.h"
 #include <sys/types.h>
@@ -8,11 +9,13 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include "bitcode.h"
 
 /**
  * Given archive open for writing and path to inode, copy node into archive
+ * Input file descriptor open for writing
  */
-void archiveNode(FILE* archive, char* node)
+void archiveNode(int archive, char* node)
 {
     int nodeLen = strlen(node);
     while (nodeLen > 0 && node[nodeLen-1] == '/') node[--nodeLen] = '\0';
@@ -20,11 +23,14 @@ void archiveNode(FILE* archive, char* node)
     struct stat nodeData;
     if (lstat(node, &nodeData)) SYS_ERR_DONE("lstat");
     mode_t mode = nodeData.st_mode;
+#if MAC
     // store these so they can be restored
     struct timeval times[2];
+    // pretty sure this one doesn't work
     TIMESPEC_TO_TIMEVAL(times, &nodeData.st_atimespec);
     TIMESPEC_TO_TIMEVAL(times+1, &nodeData.st_mtimespec);
     u_long flags = nodeData.st_flags;
+#endif
 
     if (S_ISDIR(mode))
     {
@@ -37,13 +43,18 @@ void archiveNode(FILE* archive, char* node)
         return;
     }
     // write the name of this node
-    if (fwrite(&nodeLen, sizeof(nodeLen), 1, archive)<1) SYS_DIE("fwrite");
-    if (fwrite(node, sizeof(char), nodeLen, archive)<nodeLen) SYS_DIE("fwrite");
+    if (write(archive, &nodeLen, sizeof(nodeLen))<sizeof(nodeLen))
+        SYS_DIE("write");
+    if (write(archive, node, nodeLen)<nodeLen) SYS_DIE("write");
     // write the mode of this node
-    if (fwrite(&mode, sizeof(mode), 1, archive)<1) SYS_DIE("fwrite");
+    if (write(archive, &mode, sizeof(mode))<sizeof(mode)) SYS_DIE("write");
+#if MAC
     // write the times and flags of this node
-    if (fwrite(times, sizeof(struct timeval), 2, archive)<2) SYS_DIE("fwrite");
-    if (fwrite(&flags, sizeof(flags), 1, archive)<1) SYS_DIE("fwrite");
+    int timeSize = sizeof(struct timeval) * 2;
+    if (write(archive, times, timeSize)<timeSize) SYS_DIE("write");
+    // write the flags
+    if (write(archive, &flags, sizeof(flags))<sizeof(flags)) SYS_DIE("write");
+#endif
 
     if (S_ISDIR(mode))
     {
@@ -58,7 +69,12 @@ void archiveNode(FILE* archive, char* node)
         {
             if (!strcmp(subnode->d_name, ".") || !strcmp(subnode->d_name, ".."))
                 continue;
-            char* subNodePath = calloc(nodeLen + subnode->d_namlen + 2, 1);
+#if MAC
+            int nameLen = subnode->d_namlen
+#else
+            int nameLen = strlen(subnode->d_name);
+#endif
+            char* subNodePath = calloc(nodeLen + nameLen + 2, 1);
             sprintf(subNodePath, "%s/%s", node, subnode->d_name);
             archiveNode(archive, subNodePath);
             free(subNodePath);
@@ -71,65 +87,66 @@ void archiveNode(FILE* archive, char* node)
     {
         // first put length (so know where to stop when reading)
         off_t size = nodeData.st_size;
-        if (fwrite(&size, sizeof(size), 1, archive)<1) SYS_DIE("fwrite");
+        if (write(archive, &size, sizeof(size))<sizeof(size)) SYS_DIE("write");
         // regular file
         FILE* file = fopen(node, "r");
         if (!file) SYS_ERR_DONE("fopen");
         int c;
         while ((c = fgetc(file)) != EOF)
         {
-            fputc(c, archive);
+            fdputc(c, archive);
         }
         if (fclose(file)) SYS_ERR_DONE("fclose");
         if (removeOriginal && remove(node)) SYS_ERR_DONE("remove");
     }
 }
 
-void archive(char* archiveName, int nodeC, char** nodes)
+/**
+ * Input archive file descriptor open for writing.
+ */
+void archive(int archive, int nodeC, char** nodes)
 {
-    STATUS("Beginning archive to %s", archiveName);
+    STATUS("%s", "Archiving");
 
-    FILE* archive = fopen(archiveName, "w");
-    if (!archive) DIE("Can't write to archive at %s", archiveName);
-
-    fputc(0, archive);
+    fdputc(0, archive);
 
     for (int i = 0; i < nodeC; i++)
     {
         archiveNode(archive, nodes[i]);
     }
 
-    if (fclose(archive)) SYS_ERROR("fclose");
-    STATUS("Archive to %s complete", archiveName);
+    PROGRESS("%s", "Archive complete");
 }
 
-void extract(char* archiveName)
+void extract(int archive)
 {
-    STATUS("Begin extraction from %s", archiveName);
+    STATUS("%s", "Extracting");
 
-    FILE* archive = fopen(archiveName, "r");
-    if (!archive) DIE("Can't read from archive at %s", archiveName);
-
-    int prefixByte = fgetc(archive);
+    int prefixByte = fdgetc(archive);
     if (prefixByte != 0) DIE("Prefix byte nonzero: %d", prefixByte);
 
     int nodeNameLen;
-    while (fread(&nodeNameLen, sizeof(nodeNameLen), 1, archive) == 1)
+    int lenSize = sizeof(nodeNameLen);
+    int lenRead = 0;
+    while ((lenRead = read(archive, &nodeNameLen, lenSize)) == lenSize)
     {
         char nodeName[nodeNameLen + 1];
-        if (fread(nodeName, sizeof(char), nodeNameLen, archive) < nodeNameLen)
-            DIE("Unable to read name of length %d", nodeNameLen);
+        if (read(archive, nodeName, nodeNameLen) < nodeNameLen)
+            SYS_DIE("Unable to read name");
         nodeName[nodeNameLen] = '\0';
         PROGRESS("Extracting node %s", nodeName);
         mode_t mode;
-        if (fread(&mode, sizeof(mode), 1, archive) < 1)
-            DIE("%s", "Unable to read mode");
+        if (read(archive, &mode, sizeof(mode)) < sizeof(mode))
+            SYS_DIE("Unable to read mode");
+#if MAC
         struct timeval times[2];
-        if (fread(times, sizeof(struct timeval), 2, archive) < 2)
-            DIE("%s", "Unable to read timevals");
+        int timeSize = sizeof(struct timeval) * 2;
+        if (read(archive, times, timeSize) < timeSize)
+            SYS_DIE("Unable to read timevals");
         u_long flags;
-        if (fread(&flags, sizeof(flags), 1, archive) < 1)
-            DIE("%s", "Unable to read flags");
+        if (read(archive, &flags, sizeof(flags)) < sizeof(flags))
+            SYS_DIE("Unable to read flags");
+#endif
         // extract all prefix directories
         bool errorExtractingParents = false;
         for (int i=0; i < nodeNameLen; i++)
@@ -153,24 +170,25 @@ void extract(char* archiveName)
             // directories should be already taken care of
             // this is a regular file
             off_t size;
-            if (fread(&size, sizeof(size), 1, archive) < 1)
+            if (read(archive, &size, sizeof(size)) < sizeof(size))
                 DIE("%s", "Unable to read size");
             FILE* file = fopen(nodeName, "w");
             for (off_t i=0; i<size; i++)
             {
-                int c = fgetc(archive);
+                int c = fdgetc(archive);
                 if (c == EOF) DIE("%s", "File ended unexpectedly");
                 fputc(c, file);
             }
             if (fclose(file)) SYS_ERROR("fclose");
-            if (lchmod(nodeName, mode)) SYS_ERROR("chmod");
+            if (chmod(nodeName, mode)) SYS_ERROR("chmod");
+#if MAC
             if (utimes(nodeName, times)) SYS_ERROR("utimes");
             if (chflags(nodeName, flags)) SYS_ERROR("chflags");
+#endif
             // check setattrlist(2)
         }
     }
+    if (lenRead) DIE("extra bytes in archive: %d", lenRead);
 
-    if (remove(archiveName)) SYS_ERROR("remove");
-
-    STATUS("Extraction from %s complete", archiveName);
+    STATUS("%s", "Extraction complete");
 }

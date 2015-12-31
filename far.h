@@ -5,8 +5,8 @@
  * Archiving is done recursively, so be wary of archiving very deep directories
  */
 
-// creates or overwrites file at archiveName
-void archive(char* archiveName, int nodeC, char** nodes);
+// input file descriptor for writing to archive
+void archive(int archive, int nodeC, char** nodes);
 
-// removes file at archiveName
-void extract(char* archiveName);
+// input file descriptor for reading from archive
+void extract(int archive);

@@ -129,16 +129,11 @@ int minBitsToRepresent(int code)
     return numBits;
 }
 
-void encode(char* inputName, char* outputName)
+void encode(int inFile, int outFile)
 {
-    STATUS("Beginning encode from %s to %s", inputName, outputName);
+    STATUS("%s", "Begin encode");
 
-    FILE* input = fopen(inputName, "r");
-    if (!input) SYS_DIE("fopen");
-    FILE* output = fopen(outputName, "w");
-    if (!output) SYS_DIE("fopen");
-
-    putBits(COMPRESSED_PREFIX_SIZE, COMPRESSED_PREFIX, output);
+    putBits(COMPRESSED_PREFIX_SIZE, COMPRESSED_PREFIX, outFile);
 
     HashTable table = singleCharacters();
 
@@ -148,14 +143,18 @@ void encode(char* inputName, char* outputName)
     int C = 0;
     int K;
     Node whereIsC = NULL;
-    while ((K = fgetc(input)) != EOF)
+    unsigned long long bytesRead = 0;
+    unsigned long long bitsWritten = COMPRESSED_PREFIX_SIZE;
+    while ((K = fdgetc(inFile)) != EOF)
     {
+        bytesRead++;
         Node lookup = searchTable(table, C, K);
         if (!lookup)
         {
             if (!whereIsC) DIE("%s", "corrupted file");
             whereIsC->elt.frequency++;
-            putBits(numBits, C, output);
+            putBits(numBits, C, outFile);
+            bitsWritten += numBits;
             //checkTable(table);
             bool didPrune = false;
             // increase the number of bits
@@ -199,54 +198,75 @@ void encode(char* inputName, char* outputName)
         }
         C = lookup->elt.CODE;
         whereIsC = lookup;
+
+        /*
+        // current percentage read
+        int p = 100 * bytesRead / inSize;
+        if (!quiet && p > lastPercent)
+        {
+            printf("Encoding from %s to %s: %d%%\r", inputName, outputName, p);
+            fflush(stdout);
+            lastPercent = p;
+        }
+        // catch early the case where it gets too big
+        if (bitsWritten/8 > inSize) break;
+        */
     }
     if (C > 0)
     {
-        putBits(numBits, C, output);
+        putBits(numBits, C, outFile);
+        bitsWritten += numBits;
     }
-    flushBits(output);
+    flushBits(outFile);
+    bitsWritten += 8;
 
     freeTable(table);
 
-    if (fclose(input)) SYS_ERROR("fclose");
-    if (fclose(output)) SYS_ERROR("fclose");
-
     // if the encoded version is bigger, go with the other
-    struct stat outputStats;
-    if (lstat(outputName, &outputStats)) SYS_DIE("lstat");
-    struct stat inputStats;
-    if (lstat(inputName, &inputStats)) SYS_DIE("lstat");
-    off_t outSize = outputStats.st_size;
-    off_t inSize = inputStats.st_size;
-    if (outSize > inSize)
+    if (bitsWritten/8 > bytesRead)
     {
-        STATUS("%lld > %lld, so use uncompressed file", outSize, inSize);
-        rename(inputName, outputName);
+        STATUS("%s", "Encoding increases size, so use uncompressed file");
+        exit(UNCOMPRESSABLE);
     }
+    STATUS("Encoded %llu bytes into %llu bytes", bytesRead, bitsWritten/8);
+    /*
     else
     {
+        STATUS("Encoding from %s to %s: 100%%", inputName, outputName);
+        fflush(stdout);
+        struct stat outputStats;
+        if (lstat(outputName, &outputStats)) SYS_DIE("lstat");
+        off_t outSize = outputStats.st_size;
         if (remove(inputName)) SYS_ERROR("remove");
-        
-        STATUS("Encoded %lld bytes into %lld bytes", inSize, outSize);
+        PROGRESS("Compressed %lld bytes into %lld bytes", inSize, outSize);
     }
+    */
 }
 
 #define ARRAYPREF(C) (table->elements[(C)-1].PREF)
 #define ARRAYCHAR(C) (table->elements[(C)-1].CHAR)
 
-void decode(char* inputName, char* outputName)
+void decode(int inFile, int outFile)
 {
-    STATUS("Beginning decode from %s to %s", inputName, outputName);
+    /*
+    struct stat inputStats;
+    if (lstat(inputName, &inputStats)) SYS_DIE("lstat");
+    off_t inSize = inputStats.st_size;
+    int lastPercent = -1;
 
     FILE* inFile = fopen(inputName, "r");
     if (!inFile) SYS_DIE("fopen");
-
+    */
     int compressed = getBits(COMPRESSED_PREFIX_SIZE, inFile);
     if (!compressed)
     {
-        fclose(inFile);
-        if (rename(inputName, outputName)) SYS_DIE("rename");
-        STATUS("%s is not encoded", inputName);
+        STATUS("%s", "Archive is not encoded");
+        fdputc(0, outFile);
+        int c = 0;
+        while ((c = fdgetc(inFile)) != EOF)
+        {
+            fdputc(c, outFile);
+        }
         return;
     }
     if (compressed != COMPRESSED_PREFIX)
@@ -254,8 +274,8 @@ void decode(char* inputName, char* outputName)
         DIE("LZW prefix %d must be 0 or %d", compressed, COMPRESSED_PREFIX);
     }
 
-    FILE* outFile = fopen(outputName, "w");
-    if (!outFile) SYS_DIE("fopen");
+    unsigned long long bitsRead = COMPRESSED_PREFIX_SIZE;
+    unsigned long long bytesWritten = 0;
 
     Array table;
     HashTable hashTable = singleCharacters();
@@ -268,8 +288,6 @@ void decode(char* inputName, char* outputName)
     int newC, C;
     char finalK;
     int numBits = minBitsToRepresent(table->count);
-    bool frozen, pleaseFreeze;
-    frozen=pleaseFreeze = false;
     //bool justPruned = false;
     //int readNumBits;
     //long readFrequency;
@@ -278,10 +296,11 @@ void decode(char* inputName, char* outputName)
     int readC = 0;
     while ((readC = getBits(numBits, inFile)) != EOF)
     {
+        bitsRead += numBits;
+
         C = newC = readC;
         if (readC == 0) C = newC = 1<<numBits;
-        if (C < 0) DIE("%s", "Negative code");
-        if (C == 0) DIE("%s", "zero code");
+        if (C <= 0) DIE("Invalid code %d", C);
         //if (!C) fprintf(stderr, "uh oh");
         codeIndex++;
         if (C > table->count+1) {
@@ -306,12 +325,14 @@ void decode(char* inputName, char* outputName)
             C = ARRAYPREF(C);
         }
         finalK = ARRAYCHAR(C);
-        fputc(finalK, outFile);
+        fdputc(finalK, outFile);
+        bytesWritten++;
         while (stack->count)
         {
-            fputc(popStack(stack), outFile);
+            fdputc(popStack(stack), outFile);
+            bytesWritten++;
         }
-        if (oldC && !frozen)
+        if (oldC)
         {
             ArrayElement elt;
             elt.PREF = oldC;
@@ -345,16 +366,26 @@ void decode(char* inputName, char* outputName)
             }
             //continue;
         }
+        /*
+        // current percentage
+        int p = 100 * bitsRead / (8 * inSize);
+        if (!quiet && p > lastPercent)
+        {
+            printf("Decode from %s to %s: %d%%\r", inputName, outputName, p);
+            fflush(stdout);
+            lastPercent = p;
+        }
+        */
     }
 
     freeArray(table);
     freeStack(stack);
-
+    /*
     if (fclose(outFile)) SYS_ERROR("fclose");
     if (fclose(inFile)) SYS_ERROR("fclose");
 
     if (remove(inputName)) SYS_ERROR("remove");
-
-    STATUS("%s", "Completed decode");
+    */
+    STATUS("Decode %llu bytes into %llu bytes", bitsRead/8, bytesWritten);
 }
 

@@ -9,6 +9,10 @@
 #include <stdbool.h>
 #include <openssl/sha.h>
 #include <sys/stat.h>
+#include "bitcode.h"
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <unistd.h>
 
 #define PMPZ(num) mpz_out_str(stdout,10,(num))
 #define PROG_MPZ(name,num) if(verbose)printf(name ": "),PMPZ(num),printf("\n")
@@ -60,7 +64,7 @@ void checkPassword(char* password, unsigned char* hash)
     }
     else
     {
-        STATUS("%s", "Password correct");
+        PROGRESS("%s", "Password correct");
     }
 }
 
@@ -74,7 +78,12 @@ void hashPassword(char* password, unsigned char* hash)
     unsigned char saltedPassword[SALT_LEN+passwordLength];
     for (int i = 0; i < SALT_LEN; i++)
     {
-        hash[i] = saltedPassword[i] = arc4random_uniform(UCHAR_MAX + 1);
+#if MAC
+        unsigned char random = arc4random_uniform(UCHAR_MAX + 1);
+#else
+        unsigned char random = rand() % (UCHAR_MAX + 1);
+#endif
+        hash[i] = saltedPassword[i] = random;
     }
     for (int i = 0; i < passwordLength; i++)
     {
@@ -113,7 +122,7 @@ void appendDigit(bigint* n, unsigned int digit)
 }
 
 // reads from file one digit at a time until message has > goal digits
-bigint makeMessage(FILE* inFile, int goal, int* totalBytes)
+bigint makeMessage(int inFile, int goal, int* totalBytes, bool* reachedEOF)
 {
     bigint message;
     message.n = 0;
@@ -121,7 +130,7 @@ bigint makeMessage(FILE* inFile, int goal, int* totalBytes)
     message.digits = calloc(sizeof(unsigned int), message.capacity);
     unsigned char bytes[BYTE_GROUP];
     int bytesRead;
-    while ((bytesRead = fread(bytes, 1, BYTE_GROUP, inFile)))
+    while ((bytesRead = read(inFile, bytes, BYTE_GROUP)) > 0)
     {
         *totalBytes += bytesRead;
         for (int i = BYTE_GROUP-1; i >= bytesRead; i--) bytes[i] = 0;
@@ -137,6 +146,8 @@ bigint makeMessage(FILE* inFile, int goal, int* totalBytes)
         if (message.n > goal) return message;
     }
     // fingers crossed that this number is relatively prime to n
+    if (bytesRead < 0) SYS_DIE("read");
+    *reachedEOF = true;
     return message;
 }
 
@@ -179,6 +190,7 @@ bigint convertMPZ(mpz_t a)
         appendDigit(&b, mpz_get_ui(digit));
     }
     mpz_clear(digit);
+    mpz_clear(base);
 
     return b;
 }
@@ -223,24 +235,26 @@ bigint modularExponential(bigint b, unsigned int e, bigint n)
 #define MESSAGE_PROGRESS_GROUPS (30)
 
 // c = m^e mod n will convert message m into ciphertext c
-void encryptRSA(char* password, char* inputName, char* outputName)
+void encryptRSA(char* password, int inFile, int outFile)
 {
-    STATUS("Beginning encryption from %s to %s", inputName, outputName);
-
+    //PROGRESS("Encrypting from %s to %s", inputName, outputName);
+    STATUS("%s", "Encrypting");
     // find size of file to show nice progress
+    /*
     struct stat inFileData;
     if (lstat(inputName, &inFileData)) SYS_ERROR("lstat");
     off_t inFileSize = inFileData.st_size;
-    off_t progressCutoff = inFileSize / MESSAGE_PROGRESS_GROUPS;
-
+    */
+    //off_t progressCutoff = inFileSize / MESSAGE_PROGRESS_GROUPS;
+    /*
     FILE* inFile = fopen(inputName, "r");
     if (!inFile) SYS_DIE("fopen");
     FILE* outFile = fopen(outputName, "w");
     if (!outFile) SYS_DIE("fopen");
-
+    */
     unsigned char hash[HASH_LEN];
     hashPassword(password, hash);
-    if (fwrite(hash, 1, HASH_LEN, outFile) < HASH_LEN) SYS_DIE("fwrite");
+    if (write(outFile, hash, HASH_LEN) < HASH_LEN) SYS_DIE("write");
 
     bigint n;
     unsigned int nDigits[] = N_DATA;
@@ -251,60 +265,60 @@ void encryptRSA(char* password, char* inputName, char* outputName)
     unsigned int e = eDigits[0];
     if (E_SIZE > 1) DIE("e is too big: %d > 1", E_SIZE);
 
-    PROGRESS_PART("Fetch/Encrypt/Write Progress: ");
+    //PROGRESS_PART("Fetch/Encrypt/Write Progress: ");
     int partialProgress = 0;
-    while (!feof(inFile))
+    bool reachedEOF = false;
+    while (!reachedEOF)
     {
         int readLen = 0;
         //PROGRESS("%s", "Fetching message");
-        bigint m = makeMessage(inFile, n.n-3, &readLen);
+        bigint m = makeMessage(inFile, n.n-3, &readLen, &reachedEOF);
         //PROGRESS("%s", "Encrypting message");
         //printDigits("to encrypt", m);
         bigint c = modularExponential(m, e, n);
+        free(m.digits);
         //PROGRESS("%s", "Writing encrypted message");
         int writeLen = c.n;
-        if (fwrite(&writeLen, sizeof(writeLen), 1, outFile)<1)SYS_DIE("fwrite");
-        if (fwrite(&readLen, sizeof(readLen), 1, outFile)<1)SYS_DIE("fwrite");
+        if (write(outFile, &writeLen, sizeof(writeLen))<sizeof(writeLen))
+            SYS_DIE("write");
+        if (write(outFile, &readLen, sizeof(readLen))<sizeof(readLen))
+            SYS_DIE("write");
         for (int i = 0; i < writeLen; i++)
         {
             unsigned int dig = c.digits[i];
-            if (fwrite(&dig, sizeof(dig), 1, outFile)<1)SYS_DIE("fwrite");
+            if (write(outFile, &dig, sizeof(dig))<sizeof(dig)) SYS_DIE("write");
         }
         partialProgress += readLen;
-        if (verbose && partialProgress>progressCutoff)
+        free(c.digits);
+        /*int percent = 100 * partialProgress / inFileSize;
+        if (!quiet && percent > lastPercent)
         {
-            partialProgress %= progressCutoff;
-            PROGRESS_PART("*");
-        }
+            printf("Encrypt Progress: %d%%\r", percent);
+            fflush(stdout);
+            lastPercent = percent;
+        }*/
     }
-    PROGRESS_PART("*\n");
-
-    if (fclose(inFile)) SYS_ERROR("fclose");
-    if (fclose(outFile)) SYS_ERROR("fclose");
-
-    if (remove(inputName)) SYS_ERROR("remove");
-
-    STATUS("%s", "RSA encryption complete");
+    STATUS("Encrypted %d bytes", partialProgress);
 }
 
 // m = c^d mod n will convert ciphertext c into message m
-void decryptRSA(char* password, char* inputName, char* outputName)
+void decryptRSA(char* password, int inFile, int outFile)
 {
-    STATUS("Beginning decryption from %s to %s", inputName, outputName);
-
+    /*
+    PROGRESS("Decrypting from %s to %s", inputName, outputName);
+    fflush(stdout);
     // find size of file to show nice progress
     struct stat inFileData;
     if (lstat(inputName, &inFileData)) SYS_ERROR("lstat");
     off_t inFileSize = inFileData.st_size;
-    off_t progressCutoff = inFileSize / MESSAGE_PROGRESS_GROUPS;
 
     FILE* inFile = fopen(inputName, "r");
     if (!inFile) SYS_DIE("fopen");
     FILE* outFile = fopen(outputName, "w");
     if (!outFile) SYS_DIE("fopen");
-
+    */
     unsigned char hash[HASH_LEN];
-    if (fread(hash, 1, HASH_LEN, inFile) < HASH_LEN) SYS_DIE("fread");
+    if (read(inFile, hash, HASH_LEN) < HASH_LEN) SYS_DIE("fread");
     checkPassword(password, hash);
 
     bigint d;
@@ -317,15 +331,17 @@ void decryptRSA(char* password, char* inputName, char* outputName)
     n.digits = nDigits;
     n.n = N_SIZE;
 
-    PROGRESS_PART("Fetch/Decrypt/Write Progress: ");
-    int partialProgress = 0;
+    int partialProgress = HASH_LEN;
+    int bytesWritten = 0;
+    //int lastPercent = -1;
     int readLen;
-    while (fread(&readLen, sizeof(readLen), 1, inFile))
+    while (read(inFile, &readLen, sizeof(readLen)) > 0)
     {
         partialProgress += sizeof(readLen);
         //PROGRESS("%s", "Fetching ciphertext");
         int writeLen;
-        if (fread(&writeLen, sizeof(writeLen), 1, inFile)<1)DIE("%s","corrupt");
+        if (read(inFile, &writeLen, sizeof(writeLen))<sizeof(writeLen))
+            DIE("%s","corrupt");
         partialProgress += sizeof(writeLen);
         bigint c;
         c.n = readLen;
@@ -333,11 +349,12 @@ void decryptRSA(char* password, char* inputName, char* outputName)
         c.digits = calloc(readLen, usize);
         for (int i = 0; i < readLen; i++)
         {
-            if (fread(c.digits+i, usize, 1, inFile)<1)DIE("%s","corrupt");
+            if (read(inFile, c.digits+i, usize)<usize) DIE("%s","corrupt");
         }
         partialProgress += usize * readLen;
         //PROGRESS("%s", "Decrypting cyphertext");
         bigint m = bigModularExponential(c, d, n);
+        free(c.digits);
         //printDigits("decrypted", m);
         //PROGRESS("%s", "Writing decrypted message");
         for (int i = 0; i < writeLen; i++)
@@ -349,25 +366,22 @@ void decryptRSA(char* password, char* inputName, char* outputName)
                 int byteIndex = i % BYTE_GROUP;
                 // but number isn't stored like this.
                 // 0->3, 1->2, 2->1, 3->0
-                unsigned char* byte = bytes+(BYTE_GROUP-1-byteIndex);
-                if (fwrite(byte, 1, 1, outFile)<1) SYS_DIE("fwrite");
+                unsigned char byte = bytes[BYTE_GROUP-1-byteIndex];
+                fdputc(byte, outFile);
                 //PROGRESS("write byte %d", (int)(*byte));
             }
-            else fputc(0, outFile);
+            else fdputc(0, outFile);
         }
-        if (verbose && partialProgress>progressCutoff)
+        bytesWritten += writeLen;
+        free(m.digits);
+        /*int percent = 100 * partialProgress / inFileSize;
+        if (!quiet && percent>lastPercent)
         {
-            partialProgress %= progressCutoff;
-            PROGRESS_PART("*");
-        }
+            printf("Decrypt Progress: %d%%\r", percent);
+            fflush(stdout);
+            lastPercent = percent;
+        }*/
     }
-    PROGRESS_PART("*\n");
-
-    if (fclose(inFile)) SYS_ERROR("fclose");
-    if (fclose(outFile)) SYS_ERROR("fclose");
-
-    if (removeOriginal && remove(inputName)) SYS_ERROR("remove");
-
-    STATUS("%s", "RSA decryption complete");
+    STATUS("Decrypted %d bytes to yield %d bytes",partialProgress,bytesWritten);
 }
 

@@ -6,10 +6,10 @@
 #ifndef RSA
 #define RSA
 
-// removes inputName file, overwrites outputName file
-void encryptRSA(char* password, char* inputName, char* outputName);
+// reads from file descriptor inFile, writes to file descriptor outFile
+void encryptRSA(char* password, int inFile, int outFile);
 
 // removes inputName file, overwrites outputName file
-void decryptRSA(char* password, char* inputName, char* outputName);
+void decryptRSA(char* password, int inFile, int outFile);
 
 #endif
