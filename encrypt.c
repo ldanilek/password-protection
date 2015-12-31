@@ -83,8 +83,8 @@ void protect(char* password, char* archiveName, int nodeC, char** nodes)
     if (waitpid(archiveProcess, &archiveStatus, 0) < 0) SYS_DIE("waitpid");
     int encodeStatus = 0;
     if (waitpid(encodeProcess, &encodeStatus, 0) < 0) SYS_DIE("waitpid");
-    
-    if (encodeStatus)
+
+    if (encodeStatus && !archiveStatus)
     {
         // something got fucked up. very likely encodeStatus is UNCOMPRESSABLE,
         // but even if it isn't just treat it like it is.
