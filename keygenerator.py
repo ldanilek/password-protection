@@ -4,7 +4,10 @@ import math
 # generates RSA keys
 # stores these keys in the keys.h file
 
+DEFAULT_PASSWORD = "password"
+
 f = open("keys.h", "w")
+f.write("#define DEFAULT_PASSWORD \""+DEFAULT_PASSWORD+"\"\n")
 
 BYTE_GROUP = 4
 BASE = 1<<(BYTE_GROUP*8)

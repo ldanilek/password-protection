@@ -24,6 +24,9 @@
  *       Uses fewer processes and file descriptors. Default is parallel mode,
  *       which is almost always faster but status logs are more confusing.
  *
+ * -i    Insecure mode. Does not prompt for password, instead using the default
+ *       password DEFAULT_PASSWORD defined in keys.h. Overrides -p flag.
+ *
  * Flags may be separated or condensed, so -pq and -pv -q are both valid
  * 
  * The following filenames must be unused
@@ -40,6 +43,7 @@
  * If ArchiveName is -, archive is read from stdin or written to stdout
  *
  * Files listed in the command line are paths to files or directories
+ * Files and subfiles with a .lzw extension will be ignored
  *
  * General procedure:
  * Note that every file is prefixed by some metadata

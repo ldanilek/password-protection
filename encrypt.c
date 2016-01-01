@@ -7,6 +7,7 @@
 #endif
 #include <libgen.h>
 #include <ctype.h>
+#include "keys.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -110,7 +111,8 @@ void unprotect(char* password, char* archiveName)
     if (status) DIE("decryptProcess exit status %d", STAT(status));
 #endif
 
-    if (removeOriginal && remove(archiveName)) SYS_ERROR("remove");
+    if (strcmp(archiveName, "-") && removeOriginal && remove(archiveName))
+        SYS_ERROR("remove");
 }
 
 // in sequence. significantly slower, but progress statements make more sense
@@ -192,6 +194,7 @@ int main(int argc, char** argv)
 #endif
 #endif
     bool series = false;
+    bool defaultPassword = false;
     int flagIndex = 1;
     while (flagIndex < argc && argv[flagIndex][0] == '-')
     {
@@ -207,6 +210,7 @@ int main(int argc, char** argv)
             else if (flag[fIndex] == 'p') showPassword = true;
 #endif
             else if (flag[fIndex] == 's') series = true;
+            else if (flag[fIndex] == 'i') defaultPassword = true;
             else DIE("Invalid flag %c", flag[fIndex]);
         }
         flagIndex++;
@@ -216,40 +220,42 @@ int main(int argc, char** argv)
     if (!decrypt && argc-flagIndex < 2) DIE("Invalid encrypt argc: %d", argc);
 
     // take password as input
-    char* password = "";
-    
+    char* password = DEFAULT_PASSWORD;
+    if (!defaultPassword)
+    {
 #ifdef ENCRYPT
 #if MAC
-    if (showPassword)
-    {
-#endif
-        int capacity = 5;
-        password = calloc(capacity, sizeof(char));
-        int count = 0;
-        int c;
-        fprintf(stderr, PASSWORD_PROMPT);
-        
-        // terminal input
-        FILE* devtty = fopen("/dev/tty", "r");
-        while (isprint(c = fgetc(devtty ? devtty : stdin)))
+        if (showPassword)
         {
-            if (count+1 >= capacity)
+#endif
+            int capacity = 5;
+            password = calloc(capacity, sizeof(char));
+            int count = 0;
+            int c;
+            fprintf(stderr, PASSWORD_PROMPT);
+            
+            // terminal input
+            FILE* devtty = fopen("/dev/tty", "r");
+            while (isprint(c = fgetc(devtty ? devtty : stdin)))
             {
-                capacity*=2;
-                password = realloc(password, capacity*sizeof(char));
+                if (count+1 >= capacity)
+                {
+                    capacity*=2;
+                    password = realloc(password, capacity*sizeof(char));
+                }
+                password[count++] = c;
             }
-            password[count++] = c;
-        }
-        if (devtty && fclose(devtty)) SYS_ERROR("fclose");
-        password[count] = '\0';
+            if (devtty && fclose(devtty)) SYS_ERROR("fclose");
+            password[count] = '\0';
 #if MAC
-    }
-    else
-    {
-        password = getpass(PASSWORD_PROMPT);
-    }
+        }
+        else
+        {
+            password = getpass(PASSWORD_PROMPT);
+        }
 #endif
 #endif
+    }
 
     char* archiveName = argv[flagIndex];
 
@@ -291,7 +297,7 @@ int main(int argc, char** argv)
     }
 
 #ifdef ENCRYPT
-    if (showPassword) free(password);
+    if (!defaultPassword && showPassword) free(password);
 #endif
 }
 

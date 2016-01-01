@@ -4,7 +4,7 @@ DEFS = -DENCRYPT
 CC = gcc
 
 # flags to pass compiler
-CFLAGS = -O3 -std=c99 -Wall -Werror -I/usr/local/include $(DEFS)
+CFLAGS = -O0 -ggdb3 -std=c99 -Wall -Werror -I/usr/local/include $(DEFS)
 
 # name for executable
 EXE = encrypt

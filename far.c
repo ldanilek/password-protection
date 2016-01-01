@@ -77,6 +77,8 @@ void archiveNode(int archive, char* node, char* nodeLZW)
 #else
             int nameLen = strlen(subnode->d_name);
 #endif
+            if (nameLen >= 4 && strcmp(subnode->d_name+nameLen-4, ".lzw")==0)
+                continue;
             char* subNodePath = calloc(nodeLen + nameLen + 2, 1);
             sprintf(subNodePath, "%s/%s", node, subnode->d_name);
             archiveNode(archive, subNodePath, nodeLZW);
@@ -101,6 +103,7 @@ void archiveNode(int archive, char* node, char* nodeLZW)
         // encode this file
         PROGRESS("Encoding %s to %s", node, nodeLZW);
         bool didEncode = encode(file, encoded);
+        PROGRESS("Encoding %s complete", node);
         if (close(encoded)) SYS_ERROR("close");
         if (close(file)) SYS_ERROR("close");
 
@@ -214,6 +217,7 @@ void extract(int archive)
             }
             // check setattrlist(2)
         }
+        PROGRESS("Finished extraction of node %s", nodeName);
     }
 
     STATUS("%s", "Extraction complete");
