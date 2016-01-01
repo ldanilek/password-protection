@@ -7,7 +7,9 @@
 
 // input file descriptor for writing to archive
 // archives each node into the file in encoded format
-void archive(int archive, int nodeC, char** nodes);
+// temporary storage of encoded file goes in nodeLZW
+// which must be openable for writing
+void archive(int archive, char* nodeLZW, int nodeC, char** nodes);
 
 // input file descriptor for reading from archive
 void extract(int archive);

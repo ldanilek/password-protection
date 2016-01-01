@@ -17,7 +17,7 @@
  * Given archive open for writing and path to inode, copy node into archive
  * Input file descriptor open for writing
  */
-void archiveNode(int archive, char* node)
+void archiveNode(int archive, char* node, char* nodeLZW)
 {
     int nodeLen = strlen(node);
     while (nodeLen > 0 && node[nodeLen-1] == '/') node[--nodeLen] = '\0';
@@ -79,7 +79,7 @@ void archiveNode(int archive, char* node)
 #endif
             char* subNodePath = calloc(nodeLen + nameLen + 2, 1);
             sprintf(subNodePath, "%s/%s", node, subnode->d_name);
-            archiveNode(archive, subNodePath);
+            archiveNode(archive, subNodePath, nodeLZW);
             free(subNodePath);
         }
 
@@ -95,8 +95,6 @@ void archiveNode(int archive, char* node)
         int file = open(node, O_RDONLY);
         if (file < 0) SYS_ERR_DONE("open");
 
-        char* nodeLZW = calloc(nodeLen + 5, 1);
-        sprintf(nodeLZW, "%s.lzw", node);
         int encoded = open(nodeLZW, O_WRONLY|O_CREAT|O_TRUNC, 0600);
         if (encoded < 0) SYS_ERR_DONE("open lzw");
 
@@ -132,7 +130,6 @@ void archiveNode(int archive, char* node)
             if (fclose(f)) SYS_ERROR("close");
         }
         if (remove(nodeLZW)) SYS_ERROR("remove");
-        free(nodeLZW);
         
         if (removeOriginal && remove(node)) SYS_ERROR("remove");
     }
@@ -141,11 +138,11 @@ void archiveNode(int archive, char* node)
 /**
  * Input archive file descriptor open for writing.
  */
-void archive(int archive, int nodeC, char** nodes)
+void archive(int archive, char* nodeLZW, int nodeC, char** nodes)
 {
     STATUS("%s", "Archiving");
 
-    for (int i = 0; i < nodeC; i++) archiveNode(archive, nodes[i]);
+    for (int i = 0; i < nodeC; i++) archiveNode(archive, nodes[i], nodeLZW);
 
     PROGRESS("%s", "Archive complete");
 }

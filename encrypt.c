@@ -32,7 +32,8 @@ bool removeOriginal = false;
 
 // doesn't have to worry about encoding, since archive() takes care of that
 // uses a child process to archive/encode and encrypts in the parent
-void protect(char* password, char* archiveName, int nodeC, char** nodes)
+void protect(char* password, char* archiveName, char* archiveLZW,
+    int nodeC, char** nodes)
 {
     int newFile = open(archiveName,O_WRONLY|O_CREAT|O_TRUNC,ARCHIVE_PERMISSION);
     if (newFile < 0) SYS_DIE("open");
@@ -46,7 +47,7 @@ void protect(char* password, char* archiveName, int nodeC, char** nodes)
     if (archiveProcess == 0)
     {
         if (close(archiveToEncryptPipe[0])) SYS_DIE("close");
-        archive(archiveToEncryptPipe[1], nodeC, nodes);
+        archive(archiveToEncryptPipe[1], archiveLZW, nodeC, nodes);
         
         exit(0);
     }
@@ -60,7 +61,7 @@ void protect(char* password, char* archiveName, int nodeC, char** nodes)
     int archiveStatus = 0;
     if (waitpid(archiveProcess, &archiveStatus, 0) < 0) SYS_DIE("waitpid");
 #else
-    archive(newFile, nodeC, nodes);
+    archive(newFile, archiveLZW, nodeC, nodes);
 #endif
 
     if (close(newFile)) SYS_ERROR("close");
@@ -110,7 +111,7 @@ void unprotect(char* password, char* archiveName)
 
 // in sequence. significantly slower, but progress statements make more sense
 void protectS(char* password, char* archiveName, char* archiveFar,
-    int nodeC, char** nodes)
+    char* archiveLZW, int nodeC, char** nodes)
 {
     FILE* arch = fopen(archiveName, "w");
     if (!arch) SYS_DIE("fopen");
@@ -118,7 +119,7 @@ void protectS(char* password, char* archiveName, char* archiveFar,
     // archive into far
     FILE* far = fopen(archiveFar, "w");
     if (!far) SYS_DIE("fopen");
-    archive(fileno(far), nodeC, nodes);
+    archive(fileno(far), archiveLZW, nodeC, nodes);
     if (fclose(far)) SYS_ERROR("fclose");
     // encrypt from far to archive
     far = fopen(archiveFar, "r");
@@ -127,7 +128,7 @@ void protectS(char* password, char* archiveName, char* archiveFar,
     if (fclose(far)) SYS_ERROR("fclose");
     if (remove(archiveFar)) SYS_ERROR("remove");
 #else
-    archive(fileno(arch), nodeC, nodes);
+    archive(fileno(arch), archiveLZW, nodeC, nodes);
 #endif
     if (fclose(arch)) SYS_ERROR("fclose");
 }
@@ -238,9 +239,13 @@ int main(int argc, char** argv)
 
     char* archiveName = argv[flagIndex];
 
+    int archiveNameLen = strlen(archiveName);
+
+    // make room for .lzw with null terminator
+    char* archiveLZW = calloc(archiveNameLen + 5, sizeof(char));
+    sprintf(archiveLZW, "%s.lzw", archiveName);
     if (series)
     {
-        int archiveNameLen = strlen(archiveName);
         // make room for .far with null terminator
         char* archiveFar = calloc(archiveNameLen + 5, sizeof(char));
         sprintf(archiveFar, "%s.far", archiveName);
@@ -250,7 +255,7 @@ int main(int argc, char** argv)
         }
         else
         {
-            protectS(password, archiveName, archiveFar,
+            protectS(password, archiveName, archiveFar, archiveLZW,
                 argc-flagIndex-1, argv+flagIndex+1);
         }
         free(archiveFar);
@@ -265,12 +270,12 @@ int main(int argc, char** argv)
         else
         {
             // Encrypt
-            protect(password, archiveName, argc-flagIndex-1, argv+flagIndex+1);
+            protect(password, archiveName, archiveLZW,
+                argc-flagIndex-1, argv+flagIndex+1);
+            free(archiveLZW);
         }
     }
 
-    
-    
 #ifdef ENCRYPT
     if (showPassword) free(password);
 #endif

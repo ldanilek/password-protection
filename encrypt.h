@@ -32,7 +32,7 @@
  * and File is any command line argument after the ArchiveName:
  * ArchiveName.far (only in series mode)
  * ArchiveName (only in encode, in decode this file is needed)
- * File.lzw
+ * ArchiveName.lzw (only in encode)
  * File (only in decode, in encode this file is needed)
  *
  * ArchiveName may not begin with a hyphen, but it may be any writable path
