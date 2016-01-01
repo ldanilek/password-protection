@@ -184,7 +184,7 @@ void extract(int archive)
                 if (fclose(file)) SYS_ERROR("fclose");
                 if (chmod(nodeName, mode)) SYS_ERROR("chmod");
 #if MAC
-                if (chflags(nodeName, flags))SYS_ERROR("chflags");
+                if (chflags(nodeName, flags)) SYS_ERROR("chflags");
                 if (utimes(nodeName, times)) SYS_ERROR("utimes");
 #endif
             }
