@@ -31,8 +31,8 @@ If you only want to install on one computer, simply run ```make install```. Othe
 
 ## Everyday Use
 
-* ```encrypt flags ArchiveName File1 File2 ...```
-* ```decrypt flags ArchiveName```
+* ```encrypt [options] ArchiveName File1 File2 ...```
+* ```decrypt [options] ArchiveName```
 
 See encrypt.h for complete description of flags and restrictions
 
@@ -47,10 +47,10 @@ This mode does not require GMP or openssl (the only nonstandard libraries used).
 
 ## Everyday use
 
-* ```lzwcompress flags ArchiveName File1 File2 ...```
-* ```lzwdecompress flags ArchiveName```
+* ```lzwcompress [options] ArchiveName File1 File2 ...```
+* ```lzwdecompress [options] ArchiveName```
 
-See encrypt.h for description of flags and restrictions. In compression-only mode, the -s flag is not allowed.
+See encrypt.h for description of flags and restrictions. In compression-only mode, the -p flag is not allowed.
 
 # Assumptions
 
@@ -75,6 +75,5 @@ Listed are a few constants you can change to trade security for speed.
 Still on the list of things to do:
 
 * Salt the encryption so the same message is encrypted to different data
-* Encode each archived file separately
 * Archive symbolic links
 * Obscure the secret key inside the executable

@@ -35,7 +35,9 @@ bool removeOriginal = false;
 void protect(char* password, char* archiveName, char* archiveLZW,
     int nodeC, char** nodes)
 {
-    int newFile = open(archiveName,O_WRONLY|O_CREAT|O_TRUNC,ARCHIVE_PERMISSION);
+    int newFile = STDOUT_FILENO;
+    if (strcmp(archiveName, "-"))
+        newFile = open(archiveName,O_WRONLY|O_CREAT|O_TRUNC,ARCHIVE_PERMISSION);
     if (newFile < 0) SYS_DIE("open");
     
 #ifdef ENCRYPT
@@ -71,7 +73,9 @@ void protect(char* password, char* archiveName, char* archiveLZW,
 // use child process for decrypting, extract in parent
 void unprotect(char* password, char* archiveName)
 {
-    int archiveFile = open(archiveName, O_RDONLY);
+    int archiveFile = STDIN_FILENO;
+    if (strcmp(archiveName, "-"))
+        archiveFile = open(archiveName, O_RDONLY);
     if (archiveFile < 0) SYS_DIE("open");
 
 #ifdef ENCRYPT
@@ -113,7 +117,9 @@ void unprotect(char* password, char* archiveName)
 void protectS(char* password, char* archiveName, char* archiveFar,
     char* archiveLZW, int nodeC, char** nodes)
 {
-    FILE* arch = fopen(archiveName, "w");
+    FILE* arch = stdout;
+    if (strcmp(archiveName, "-"))
+        arch = fopen(archiveName, "w");
     if (!arch) SYS_DIE("fopen");
 #ifdef ENCRYPT
     // archive into far
@@ -135,7 +141,9 @@ void protectS(char* password, char* archiveName, char* archiveFar,
 
 void unprotectS(char* password, char* archiveName, char* archiveFar)
 {
-    FILE* arch = fopen(archiveName, "r");
+    FILE* arch = stdin;
+    if (strcmp(archiveName, "-"))
+        arch = fopen(archiveName, "r");
     if (!arch) SYS_DIE("fopen");
 
 #ifdef ENCRYPT
@@ -189,6 +197,7 @@ int main(int argc, char** argv)
     {
         char* flag = argv[flagIndex]+1;
         int flagCount = strlen(flag);
+        if (flagCount == 0) break; // ArchiveName is "-"
         for (int fIndex = 0; fIndex < flagCount; fIndex++)
         {
             if (flag[fIndex] == 'r') removeOriginal = true;
@@ -208,6 +217,7 @@ int main(int argc, char** argv)
 
     // take password as input
     char* password = "";
+    
 #ifdef ENCRYPT
 #if MAC
     if (showPassword)
@@ -218,7 +228,10 @@ int main(int argc, char** argv)
         int count = 0;
         int c;
         fprintf(stderr, PASSWORD_PROMPT);
-        while (isprint(c = getchar()))
+        
+        // terminal input
+        FILE* devtty = fopen("/dev/tty", "r");
+        while (isprint(c = fgetc(devtty ? devtty : stdin)))
         {
             if (count+1 >= capacity)
             {
@@ -227,6 +240,7 @@ int main(int argc, char** argv)
             }
             password[count++] = c;
         }
+        if (devtty && fclose(devtty)) SYS_ERROR("fclose");
         password[count] = '\0';
 #if MAC
     }

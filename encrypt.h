@@ -37,11 +37,13 @@
  *
  * ArchiveName may not begin with a hyphen, but it may be any writable path
  * Therefore ./-name is a valid workaround
+ * If ArchiveName is -, archive is read from stdin or written to stdout
+ *
  * Files listed in the command line are paths to files or directories
  *
  * General procedure:
  * Note that every file is prefixed by some metadata
- * Request password string from stdin
+ * Request password string from /dev/tty (similar to stdin)
  * Create ArchiveName.far, a single file containing listed files and directories
  * With data from files compressed using LZW compression
  *     metadata before each file: 0 byte if uncompressed, nonzero byte otherwise
@@ -60,7 +62,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define MAC 1
+#define MAC 0
 
 extern bool quiet;
 extern bool verbose;
@@ -73,8 +75,8 @@ extern bool removeOriginal;
 // use for minor progress reports
 #define PROGRESS(format,...) if(verbose)fprintf(stderr,format "\n",__VA_ARGS__)
 
-// no newline, string literal, and fflushes
-#define PROGRESS_PART(format) if(verbose)fprintf(stderr,format),fflush(stdout)
+// no newline, string literal
+#define PROGRESS_PART(format) if(verbose)fprintf(stderr,format)
 
 // Write message to stderr using format FORMAT
 #define WARN(format,...) fprintf (stderr, format "\n", __VA_ARGS__)

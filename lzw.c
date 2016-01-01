@@ -276,7 +276,7 @@ void decode(int inFile, int outFile, int bytesToWrite)
 
     int oldC = 0;
     int newC, C;
-    char finalK;
+    char finalK = 0;
     int numBits = minBitsToRepresent(table->count);
     //bool justPruned = false;
     //int readNumBits;

@@ -14,8 +14,8 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
-#define PMPZ(num) mpz_out_str(stdout,10,(num))
-#define PROG_MPZ(name,num) if(verbose)printf(name ": "),PMPZ(num),printf("\n")
+//#define PMPZ(num) mpz_out_str(stdout,10,(num))
+//#define PROG_MPZ(name,num) if(verbose)printf(name ": "),PMPZ(num),printf("\n")
 
 // this is assumed to be 4. if it changes, keygenerator.py must be updated
 #define BYTE_GROUP (sizeof(unsigned int))
@@ -92,7 +92,7 @@ void hashPassword(char* password, unsigned char* hash)
 
     SHA1(saltedPassword, SALT_LEN+passwordLength, hash + SALT_LEN);
 }
-
+/*
 void printDigits(char* name, bigint num)
 {
     if (!verbose) return;
@@ -103,7 +103,7 @@ void printDigits(char* name, bigint num)
     }
     printf("\n");
 }
-
+*/
 void normalize(bigint* num)
 {
     while (num->n > 1 && num->digits[num->n - 1] == 0) num->n--;
@@ -375,13 +375,6 @@ void decryptRSA(char* password, int inFile, int outFile)
         }
         bytesWritten += writeLen;
         free(m.digits);
-        /*int percent = 100 * partialProgress / inFileSize;
-        if (!quiet && percent>lastPercent)
-        {
-            printf("Decrypt Progress: %d%%\r", percent);
-            fflush(stdout);
-            lastPercent = percent;
-        }*/
     }
     STATUS("Decrypted %d bytes to yield %d bytes",partialProgress,bytesWritten);
 }
