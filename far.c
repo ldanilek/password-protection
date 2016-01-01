@@ -9,7 +9,9 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <fcntl.h>
 #include "bitcode.h"
+#include "lzw.h"
 
 /**
  * Given archive open for writing and path to inode, copy node into archive
@@ -22,6 +24,7 @@ void archiveNode(int archive, char* node)
     PROGRESS("Archiving node %s", node);
     struct stat nodeData;
     if (lstat(node, &nodeData)) SYS_ERR_DONE("lstat");
+
     mode_t mode = nodeData.st_mode;
 #if MAC
     // store these so they can be restored
@@ -89,15 +92,49 @@ void archiveNode(int archive, char* node)
         off_t size = nodeData.st_size;
         if (write(archive, &size, sizeof(size))<sizeof(size)) SYS_DIE("write");
         // regular file
-        FILE* file = fopen(node, "r");
-        if (!file) SYS_ERR_DONE("fopen");
-        int c;
-        while ((c = fgetc(file)) != EOF)
+        int file = open(node, O_RDONLY);
+        if (file < 0) SYS_ERR_DONE("open");
+
+        char* nodeLZW = calloc(nodeLen + 5, 1);
+        sprintf(nodeLZW, "%s.lzw", node);
+        int encoded = open(nodeLZW, O_WRONLY|O_CREAT|O_TRUNC, 0600);
+        if (encoded < 0) SYS_ERR_DONE("open lzw");
+
+        // encode this file
+        PROGRESS("Encoding %s to %s", node, nodeLZW);
+        bool didEncode = encode(file, encoded);
+        if (close(encoded)) SYS_ERROR("close");
+        if (close(file)) SYS_ERROR("close");
+
+        if (didEncode)
         {
-            fdputc(c, archive);
+            // write from nodeLZW to archive
+            FILE* lzw = fopen(nodeLZW, "r");
+            if (!lzw) SYS_DIE("fopen");
+            int c;
+            while ((c = fgetc(lzw)) != EOF)
+            {
+                fdputc(c, archive);
+            }
+            if (fclose(lzw)) SYS_ERROR("close");
         }
-        if (fclose(file)) SYS_ERR_DONE("fclose");
-        if (removeOriginal && remove(node)) SYS_ERR_DONE("remove");
+        else
+        {
+            fdputc(0, archive);
+            // copy from node to archive
+            FILE* f = fopen(node, "r");
+            if (!f) SYS_DIE("open");
+            int c;
+            while ((c = fgetc(f)) != EOF)
+            {
+                fdputc(c, archive);
+            }
+            if (fclose(f)) SYS_ERROR("close");
+        }
+        if (remove(nodeLZW)) SYS_ERROR("remove");
+        free(nodeLZW);
+        
+        if (removeOriginal && remove(node)) SYS_ERROR("remove");
     }
 }
 
@@ -108,12 +145,7 @@ void archive(int archive, int nodeC, char** nodes)
 {
     STATUS("%s", "Archiving");
 
-    fdputc(0, archive);
-
-    for (int i = 0; i < nodeC; i++)
-    {
-        archiveNode(archive, nodes[i]);
-    }
+    for (int i = 0; i < nodeC; i++) archiveNode(archive, nodes[i]);
 
     PROGRESS("%s", "Archive complete");
 }
@@ -121,9 +153,6 @@ void archive(int archive, int nodeC, char** nodes)
 void extract(int archive)
 {
     STATUS("%s", "Extracting");
-
-    int prefixByte = fdgetc(archive);
-    if (prefixByte != 0) DIE("Prefix byte nonzero: %d", prefixByte);
 
     int nodeNameLen;
     int lenSize = sizeof(nodeNameLen);
@@ -173,18 +202,16 @@ void extract(int archive)
                 DIE("%s", "Unable to read size");
             FILE* file = fopen(nodeName, "w");
             if (!file) SYS_ERROR("fopen"); // permissions error
-            for (off_t i=0; i<size; i++)
-            {
-                int c = fdgetc(archive);
-                if (c == EOF) DIE("%s", "File ended unexpectedly");
-                if (file) fputc(c, file);
-            }
+
+            // decode into the file
+            decode(archive, fileno(file), size);
+
             if (file)
             {
                 if (fclose(file)) SYS_ERROR("fclose");
                 if (chmod(nodeName, mode)) SYS_ERROR("chmod");
 #if MAC
-                if (chflags(nodeName, flags))SYS_ERROR("chflags");
+                if (chflags(nodeName, flags)) SYS_ERROR("chflags");
                 if (utimes(nodeName, times)) SYS_ERROR("utimes");
 #endif
             }

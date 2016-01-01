@@ -11,8 +11,8 @@
 
 #define INITIAL_NUM_BITS 9
 #define MAX_BITS 20
-#define COMPRESSED_PREFIX_SIZE 1
-#define COMPRESSED_PREFIX 1
+#define COMPRESSED_PREFIX_SIZE 8
+#define COMPRESSED_PREFIX 100
 
 struct stack {
     char* elements;
@@ -129,7 +129,7 @@ int minBitsToRepresent(int code)
     return numBits;
 }
 
-void encode(int inFile, int outFile)
+bool encode(int inFile, int outFile)
 {
     STATUS("%s", "Begin encode");
 
@@ -199,19 +199,6 @@ void encode(int inFile, int outFile)
         C = lookup->elt.CODE;
         whereIsC = lookup;
         whereIsC->elt.frequency++;
-
-        /*
-        // current percentage read
-        int p = 100 * bytesRead / inSize;
-        if (!quiet && p > lastPercent)
-        {
-            printf("Encoding from %s to %s: %d%%\r", inputName, outputName, p);
-            fflush(stdout);
-            lastPercent = p;
-        }
-        // catch early the case where it gets too big
-        if (bitsWritten/8 > inSize) break;
-        */
     }
     if (C > 0)
     {
@@ -227,7 +214,7 @@ void encode(int inFile, int outFile)
     if (bitsWritten/8 > bytesRead)
     {
         STATUS("%s", "Encoding increases size, so use uncompressed file");
-        exit(UNCOMPRESSABLE);
+        return false;
     }
     STATUS("Encoded %llu bytes into %llu bytes", bytesRead, bitsWritten/8);
     /*
@@ -242,31 +229,30 @@ void encode(int inFile, int outFile)
         PROGRESS("Compressed %lld bytes into %lld bytes", inSize, outSize);
     }
     */
+    return true;
 }
 
 #define ARRAYPREF(C) (table->elements[(C)-1].PREF)
 #define ARRAYCHAR(C) (table->elements[(C)-1].CHAR)
 
-void decode(int inFile, int outFile)
+void decode(int inFile, int outFile, int bytesToWrite)
 {
-    /*
-    struct stat inputStats;
-    if (lstat(inputName, &inputStats)) SYS_DIE("lstat");
-    off_t inSize = inputStats.st_size;
-    int lastPercent = -1;
-
-    FILE* inFile = fopen(inputName, "r");
-    if (!inFile) SYS_DIE("fopen");
-    */
+    
     int compressed = getBits(COMPRESSED_PREFIX_SIZE, inFile);
+
     if (!compressed)
     {
         STATUS("%s", "Archive is not encoded");
-        fdputc(0, outFile);
         int c = 0;
+        int bytesWritten = 0;
+
+        if (bytesToWrite == 0) return; // make sure to test with empty files
+
         while ((c = fdgetc(inFile)) != EOF)
         {
             fdputc(c, outFile);
+            bytesWritten++;
+            if (bytesToWrite > 0 && bytesWritten >= bytesToWrite) return;
         }
         return;
     }
@@ -274,6 +260,9 @@ void decode(int inFile, int outFile)
     {
         DIE("LZW prefix %d must be 0 or %d", compressed, COMPRESSED_PREFIX);
     }
+
+    // an empty file is always made bigger, so should never get to this point
+    if (bytesToWrite == 0) return;
 
     unsigned long long bitsRead = COMPRESSED_PREFIX_SIZE;
     unsigned long long bytesWritten = 0;
@@ -324,10 +313,12 @@ void decode(int inFile, int outFile)
         finalK = ARRAYCHAR(C);
         fdputc(finalK, outFile);
         bytesWritten++;
+        if (bytesWritten >= bytesToWrite) goto alldone;
         while (stack->count)
         {
             fdputc(popStack(stack), outFile);
             bytesWritten++;
+            if (bytesWritten >= bytesToWrite) goto alldone;
         }
         if (oldC)
         {
@@ -363,26 +354,13 @@ void decode(int inFile, int outFile)
             }
             //continue;
         }
-        /*
-        // current percentage
-        int p = 100 * bitsRead / (8 * inSize);
-        if (!quiet && p > lastPercent)
-        {
-            printf("Decode from %s to %s: %d%%\r", inputName, outputName, p);
-            fflush(stdout);
-            lastPercent = p;
-        }
-        */
+        
     }
 
+    alldone: ;
     freeArray(table);
     freeStack(stack);
-    /*
-    if (fclose(outFile)) SYS_ERROR("fclose");
-    if (fclose(inFile)) SYS_ERROR("fclose");
-
-    if (remove(inputName)) SYS_ERROR("remove");
-    */
+    
     STATUS("Decode %llu bytes into %llu bytes", bitsRead/8, bytesWritten);
 }
 

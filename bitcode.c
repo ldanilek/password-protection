@@ -88,6 +88,8 @@ void flushBits (int fd)
 {
     if (nExtra != 0)
         fdputc(extraBits << (CHAR_BIT - nExtra), fd);
+    nExtra = 0;
+    extraBits = 0;
 }
 
 
@@ -106,7 +108,11 @@ int getBits (int nBits, int fd)
     // Read enough new bytes to have at least nBits bits to extract code
     while (nExtra < nBits) {
         if ((c = fdgetc(fd)) == EOF)
+        {
+            extraBits = 0;
+            nExtra = 0; // reset for next file
             return EOF;                         // Return EOF on end-of-file
+        }
         nExtra += CHAR_BIT;
         extra = (extra << CHAR_BIT) | c;
     }
