@@ -26,14 +26,14 @@
  *
  * Flags may be separated or condensed, so -pq and -pv -q are both valid
  * 
- * In series mode, the following filenames must be unused
- * (files will be overwritten), where ArchiveName is the command line argument:
- * ArchiveName.far
- * ArchiveName.lzw
- * ArchiveName
- * On decrypt, all files to extract will be overwritten,
- * and ArchiveName is required to exist and be readable
- * In parallel mode, only ArchiveName itself will be used.
+ * The following filenames must be unused
+ * (files will be overwritten if writable),
+ * where ArchiveName is the command line argument,
+ * and File is any command line argument after the ArchiveName:
+ * ArchiveName.far (only in series mode)
+ * ArchiveName (only in encode, in decode this file is needed)
+ * File.lzw
+ * File (only in decode, in encode this file is needed)
  *
  * ArchiveName may not begin with a hyphen, but it may be any writable path
  * Therefore ./-name is a valid workaround
@@ -43,17 +43,15 @@
  * Note that every file is prefixed by some metadata
  * Request password string from stdin
  * Create ArchiveName.far, a single file containing listed files and directories
- *     metadata: 0 byte
- * Create ArchiveName.lzw by performing LZW compression on ArchiveName.far
- *     metadata: nonzero byte
- * If ArchiveName.lzw is bigger, ignore it and use ArchiveName.far instead
- *     In decryption, run lzw decompression iff the first byte is nonzero
+ * With data from files compressed using LZW compression
+ *     metadata before each file: 0 byte if uncompressed, nonzero byte otherwise
  * Create ArchiveName by running RSA encryption
- *     metadata: hash of password string using the SHA1 hash function
+ *     metadata: hash of password string and salt using the SHA1 hash function
  *
- * All RSA keys are hard-coded into the source code of encrypt, so to maintain
+ * All RSA keys are hard-coded into the source code of rsa.c, so to maintain
  * security you should compile, then encrypt the source file keys.h
- * If portability isn't a problem, you can remove keys.h after compiling
+ * If portability isn't a problem, you can remove keys.h after compiling,
+ * and run make clean to remove rsa.o
  */
 
 #ifndef ENCRYPT_H

@@ -30,239 +30,132 @@ bool removeOriginal = false;
 // it can be read or (over)written
 #define ARCHIVE_PERMISSION (0600)
 
+// doesn't have to worry about encoding, since archive() takes care of that
+// uses a child process to archive/encode and encrypts in the parent
 void protect(char* password, char* archiveName, int nodeC, char** nodes)
 {
-    int archiveToEncodePipe[2];
-    if (pipe(archiveToEncodePipe)) SYS_DIE("pipe");
+    int newFile = open(archiveName,O_WRONLY|O_CREAT|O_TRUNC,ARCHIVE_PERMISSION);
+    if (newFile < 0) SYS_DIE("open");
+    
+#ifdef ENCRYPT
+    int archiveToEncryptPipe[2];
+    if (pipe(archiveToEncryptPipe)) SYS_DIE("pipe");
 
     pid_t archiveProcess = fork();
     if (archiveProcess < 0) SYS_DIE("fork");
     if (archiveProcess == 0)
     {
-        if (close(archiveToEncodePipe[0])) SYS_DIE("close");
-        archive(archiveToEncodePipe[1], nodeC, nodes);
+        if (close(archiveToEncryptPipe[0])) SYS_DIE("close");
+        archive(archiveToEncryptPipe[1], nodeC, nodes);
         
         exit(0);
     }
     // parent process
-    if (close(archiveToEncodePipe[1])) SYS_DIE("close");
+    if (close(archiveToEncryptPipe[1])) SYS_DIE("close");
 
-    int newFile = open(archiveName,O_WRONLY|O_CREAT|O_TRUNC,ARCHIVE_PERMISSION);
-    if (newFile < 0) SYS_DIE("open");
+    encryptRSA(password, archiveToEncryptPipe[0], newFile);
+    if (close(archiveToEncryptPipe[0])) SYS_ERROR("close");
 
-    int encodeToEncryptPipe[2];
-#ifdef ENCRYPT
-    if (pipe(encodeToEncryptPipe)) SYS_DIE("pipe");
-#else
-    encodeToEncryptPipe[1] = newFile;
-#endif
-
-    pid_t encodeProcess = fork();
-    if (encodeProcess < 0) SYS_DIE("fork");
-    if (encodeProcess == 0)
-    {
-#ifdef ENCRYPT
-        if (close(encodeToEncryptPipe[0])) SYS_DIE("close");
-#endif
-        encode(archiveToEncodePipe[0], encodeToEncryptPipe[1]);
-
-        exit(0);
-    }
-    // parent process
-    if (close(archiveToEncodePipe[0])) SYS_DIE("close");
-    if (close(encodeToEncryptPipe[1])) SYS_DIE("close");
-
-#ifdef ENCRYPT
-    encryptRSA(password, encodeToEncryptPipe[0], newFile);
-    if (close(encodeToEncryptPipe[0])) SYS_DIE("close");
-    if (close(newFile)) SYS_DIE("close");
-#endif
-    // wait for child processes to end
-    // (if encrypt ran, they've already ended, but should still reap them)
+    // wait for child process to end (reap it)
     int archiveStatus = 0;
     if (waitpid(archiveProcess, &archiveStatus, 0) < 0) SYS_DIE("waitpid");
-    int encodeStatus = 0;
-    if (waitpid(encodeProcess, &encodeStatus, 0) < 0) SYS_DIE("waitpid");
-
-    if (encodeStatus && !archiveStatus)
-    {
-        // something got fucked up. very likely encodeStatus is UNCOMPRESSABLE,
-        // but even if it isn't just treat it like it is.
-        newFile = open(archiveName, O_WRONLY|O_CREAT|O_TRUNC);
-        if (newFile < 0) SYS_DIE("open");
-
-#ifdef ENCRYPT
-        int archiveToEncryptPipe[2];
-        if (pipe(archiveToEncryptPipe)) SYS_DIE("pipe");
-
-        archiveProcess = fork();
-        if (archiveProcess < 0) SYS_DIE("fork");
-        if (archiveProcess == 0)
-        {
-            if (close(archiveToEncryptPipe[0])) SYS_DIE("close");
-            archive(archiveToEncryptPipe[1], nodeC, nodes);
-            exit(0);
-        }
-        if (close(archiveToEncryptPipe[1])) SYS_DIE("close");
-        encryptRSA(password, archiveToEncryptPipe[0], newFile);
-        if (close(archiveToEncryptPipe[0])) SYS_DIE("close");
-        archiveStatus = 0;
-        if (waitpid(archiveProcess, &archiveStatus, 0) < 0) SYS_DIE("waitpid");
 #else
-        archive(newFile, nodeC, nodes);
+    archive(newFile, nodeC, nodes);
 #endif
 
-        if (close(newFile)) SYS_DIE("close");
-    }
+    if (close(newFile)) SYS_ERROR("close");
 }
 
+// extract() takes care of decoding
+// use child process for decrypting, extract in parent
 void unprotect(char* password, char* archiveName)
 {
     int archiveFile = open(archiveName, O_RDONLY);
     if (archiveFile < 0) SYS_DIE("open");
 
-    int decryptToDecodePipe[2];
 #ifdef ENCRYPT
-    if (pipe(decryptToDecodePipe)) SYS_DIE("pipe");
+    int decryptToExtractPipe[2];
+    if (pipe(decryptToExtractPipe)) SYS_DIE("pipe");
 
     pid_t decryptProcess = fork();
     if (decryptProcess < 0) SYS_DIE("fork");
     if (decryptProcess == 0)
     {
-        if (close(decryptToDecodePipe[0])) SYS_DIE("close");
+        if (close(decryptToExtractPipe[0])) SYS_DIE("close");
 
-        decryptRSA(password, archiveFile, decryptToDecodePipe[1]);
+        decryptRSA(password, archiveFile, decryptToExtractPipe[1]);
 
         exit(0);
     }
-    if (close(archiveFile)) SYS_DIE("close");
-    if (close(decryptToDecodePipe[1])) SYS_DIE("close");
+    if (close(decryptToExtractPipe[1])) SYS_ERROR("close");
 #else
-    // if not decrypting, just pass archiveFile in to decode
-    decryptToDecodePipe[0] = archiveFile;
+    // if not decrypting, just pass archiveFile in to extract
+    extract(archiveFile);
 #endif
+    if (close(archiveFile)) SYS_ERROR("close");
 
-    int decodeToExtractPipe[2];
-    if (pipe(decodeToExtractPipe)) SYS_DIE("pipe");
-
-    pid_t decodeProcess = fork();
-    if (decodeProcess < 0) SYS_DIE("fork");
-    if (decodeProcess == 0)
-    {
-        if (close(decodeToExtractPipe[0])) SYS_DIE("close");
-
-        decode(decryptToDecodePipe[0], decodeToExtractPipe[1]);
-
-        exit(0);
-    }
-    if (close(decryptToDecodePipe[0])) SYS_DIE("close");
-    if (close(decodeToExtractPipe[1])) SYS_DIE("close");
-
-    extract(decodeToExtractPipe[0]);
-
-    if (close(decodeToExtractPipe[0])) SYS_DIE("close");
-
-    // reap the zombies
-    int status = 0;
 #ifdef ENCRYPT
+    extract(decryptToExtractPipe[0]);
+
+    if (close(decryptToExtractPipe[0])) SYS_ERROR("close");
+
+    // reap the zombie
+    int status = 0;
     if (waitpid(decryptProcess, &status, 0) < 0) SYS_DIE("waitpid");
     if (status) DIE("decryptProcess exit status %d", STAT(status));
 #endif
-    if (waitpid(decodeProcess, &status, 0) < 0) SYS_DIE("waitpid");
-    if (status) DIE("decodeProcess exit status %d", STAT(status));
 
     if (removeOriginal && remove(archiveName)) SYS_ERROR("remove");
 }
 
 // in sequence. significantly slower, but progress statements make more sense
 void protectS(char* password, char* archiveName, char* archiveFar,
-    char* archiveLZW, int nodeC, char** nodes)
+    int nodeC, char** nodes)
 {
+    FILE* arch = fopen(archiveName, "w");
+    if (!arch) SYS_DIE("fopen");
+#ifdef ENCRYPT
+    // archive into far
     FILE* far = fopen(archiveFar, "w");
     if (!far) SYS_DIE("fopen");
     archive(fileno(far), nodeC, nodes);
     if (fclose(far)) SYS_ERROR("fclose");
+    // encrypt from far to archive
     far = fopen(archiveFar, "r");
     if (!far) SYS_DIE("fopen");
-    FILE* lzw = fopen(archiveLZW, "w");
-    if (!lzw) SYS_DIE("fopen");
-
-    // this might exit(UNCOMPRESSABLE), so do in subprocess
-    pid_t encodeProcess = fork();
-    if (encodeProcess < 0) SYS_DIE("fork");
-    if (encodeProcess == 0)
-    {
-        encode(fileno(far), fileno(lzw));
-        exit(0);
-    }
-    int status = 0;
-    if (waitpid(encodeProcess, &status, 0) < 0) SYS_DIE("waitpid");
+    encryptRSA(password, fileno(far), fileno(arch));
     if (fclose(far)) SYS_ERROR("fclose");
-    if (fclose(lzw)) SYS_ERROR("fclose");
-    if (status)
-    {
-        if (rename(archiveFar, archiveLZW)) SYS_DIE("rename");
-    }
-    else if (remove(archiveFar)) SYS_ERROR("remove");
-    
-#ifdef ENCRYPT
-    lzw = fopen(archiveLZW, "r");
-    if (!lzw) SYS_DIE("fopen");
-    FILE* arch = fopen(archiveName, "w");
-    if (!arch) SYS_DIE("fopen");
-    encryptRSA(password, fileno(lzw), fileno(arch));
-    if (fclose(arch)) SYS_ERROR("fclose");
-    if (fclose(lzw)) SYS_ERROR("fclose");
-    if (remove(archiveLZW)) SYS_ERROR("remove");
+    if (remove(archiveFar)) SYS_ERROR("remove");
 #else
-    if (rename(archiveLZW, archiveName)) SYS_DIE("rename");
+    archive(fileno(arch), nodeC, nodes);
 #endif
+    if (fclose(arch)) SYS_ERROR("fclose");
 }
 
-void unprotectS(char* password, char* archiveName, char* archiveFar,
-    char* archiveLZW)
+void unprotectS(char* password, char* archiveName, char* archiveFar)
 {
-    FILE* lzw;
-#ifdef ENCRYPT
     FILE* arch = fopen(archiveName, "r");
     if (!arch) SYS_DIE("fopen");
-    lzw = fopen(archiveLZW, "w");
-    if (!lzw) SYS_DIE("fopen");
-    decryptRSA(password, fileno(arch), fileno(lzw));
-    if (fclose(arch)) SYS_ERROR("fclose");
-    if (removeOriginal && remove(archiveName)) SYS_ERROR("remove");
-    if (fclose(lzw)) SYS_ERROR("fclose");
-#else
-    if (removeOriginal)
-    {
-        if (rename(archiveName, archiveLZW)) SYS_DIE("rename");
-    }
-    else
-    {
-        // copy it over
-        FILE* archive = fopen(archiveName, "r");
-        if (!archive) SYS_DIE("fopen");
-        lzw = fopen(archiveLZW, "w");
-        if (!lzw) SYS_DIE("fopen");
-        int c;
-        while ((c = fgetc(archive)) != EOF) fputc(c, lzw);
-        if (fclose(archive)) SYS_ERROR("fclose");
-        if (fclose(lzw)) SYS_ERROR("fclose");
-    }
-#endif
-    lzw = fopen(archiveLZW, "r");
-    if (!lzw) SYS_DIE("fopen");
+
+#ifdef ENCRYPT
+    // decrypt into far
     FILE* far = fopen(archiveFar, "w");
-    if (!far) SYS_DIE("far");
-    decode(fileno(lzw), fileno(far));
-    if (fclose(lzw)) SYS_ERROR("fclose");
+    if (!far) SYS_DIE("fopen");
+    decryptRSA(password, fileno(arch), fileno(far));
     if (fclose(far)) SYS_ERROR("fclose");
-    if (remove(archiveLZW)) SYS_ERROR("remove");
+    // extract from far
     far = fopen(archiveFar, "r");
     if (!far) SYS_DIE("fopen");
     extract(fileno(far));
     if (fclose(far)) SYS_ERROR("fclose");
     if (remove(archiveFar)) SYS_ERROR("remove");
+#else
+    // extract from arch
+    extract(fileno(arch));
+#endif
+
+    if (fclose(arch)) SYS_ERROR("fclose");
+    if (removeOriginal && remove(archiveName)) SYS_ERROR("remove");
 }
 
 
@@ -351,20 +244,16 @@ int main(int argc, char** argv)
         // make room for .far with null terminator
         char* archiveFar = calloc(archiveNameLen + 5, sizeof(char));
         sprintf(archiveFar, "%s.far", archiveName);
-
-        char* archiveLZW = calloc(archiveNameLen + 5, sizeof(char));
-        sprintf(archiveLZW, "%s.lzw", archiveName);
         if (decrypt)
         {
-            unprotectS(password, archiveName, archiveFar, archiveLZW);
+            unprotectS(password, archiveName, archiveFar);
         }
         else
         {
-            protectS(password, archiveName, archiveFar, archiveLZW,
+            protectS(password, archiveName, archiveFar,
                 argc-flagIndex-1, argv+flagIndex+1);
         }
         free(archiveFar);
-        free(archiveLZW);
     }
     else
     {

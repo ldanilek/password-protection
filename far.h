@@ -6,6 +6,7 @@
  */
 
 // input file descriptor for writing to archive
+// archives each node into the file in encoded format
 void archive(int archive, int nodeC, char** nodes);
 
 // input file descriptor for reading from archive

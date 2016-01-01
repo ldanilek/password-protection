@@ -304,6 +304,7 @@ void encryptRSA(char* password, int inFile, int outFile)
 // m = c^d mod n will convert ciphertext c into message m
 void decryptRSA(char* password, int inFile, int outFile)
 {
+    STATUS("%s", "Decrypting");
     /*
     PROGRESS("Decrypting from %s to %s", inputName, outputName);
     fflush(stdout);
