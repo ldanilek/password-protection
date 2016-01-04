@@ -8,6 +8,10 @@
 #include <libgen.h>
 #include <ctype.h>
 #include "keys.h"
+#if MAC
+#else
+#include <termios.h>
+#endif
 
 #include <string.h>
 #include <stdlib.h>
@@ -187,11 +191,7 @@ int main(int argc, char** argv)
 
     // determine which flags are set
 #ifdef ENCRYPT
-#if MAC
     bool showPassword = false;
-#else
-    bool showPassword = true;
-#endif
 #endif
     bool series = false;
     bool defaultPassword = false;
@@ -228,15 +228,27 @@ int main(int argc, char** argv)
         if (showPassword)
         {
 #endif
+        // terminal input
+        FILE* devtty = fopen("/dev/tty", "r");
+        FILE* passread = devtty ? devtty : stdin;
+#if MAC
+#else
+        struct termios TermConf;
+        if (tcgetattr(fileno(passread), &TermConf)) SYS_ERROR("tcgetattr");
+        if (!showPassword)
+        {
+            TermConf.c_lflag &= ~ECHO;
+            if (tcsetattr(fileno(passread), TCSANOW, &TermConf))
+                SYS_ERROR("tcsetattr");
+        }
+#endif
             int capacity = 5;
             password = calloc(capacity, sizeof(char));
             int count = 0;
             int c;
             fprintf(stderr, PASSWORD_PROMPT);
             
-            // terminal input
-            FILE* devtty = fopen("/dev/tty", "r");
-            while (isprint(c = fgetc(devtty ? devtty : stdin)))
+            while (isprint(c = fgetc(passread)))
             {
                 if (count+1 >= capacity)
                 {
@@ -245,6 +257,15 @@ int main(int argc, char** argv)
                 }
                 password[count++] = c;
             }
+#if MAC
+#else
+            if (!showPassword)
+            {
+                TermConf.c_lflag |= ECHO;
+                if (tcsetattr(fileno(passread), TCSANOW, &TermConf))
+                    SYS_ERROR("tcsetattr");
+            }
+#endif
             if (devtty && fclose(devtty)) SYS_ERROR("fclose");
             password[count] = '\0';
 #if MAC

@@ -66,7 +66,13 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define MAC 0
+// if MAC is zero,
+// termios must be a library that can be included
+// struct stat must have member st_atime and company
+// if MAC is nonzero,
+// getpass must be an allowed function
+// struct stat must have member st_atimespec and company
+#define MAC 1
 
 extern bool quiet;
 extern bool verbose;

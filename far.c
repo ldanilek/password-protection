@@ -26,13 +26,17 @@ void archiveNode(int archive, char* node, char* nodeLZW)
     if (lstat(node, &nodeData)) SYS_ERR_DONE("lstat");
 
     mode_t mode = nodeData.st_mode;
-#if MAC
     // store these so they can be restored
     struct timeval times[2];
+#if MAC
     // pretty sure this one doesn't work
     TIMESPEC_TO_TIMEVAL(times, &nodeData.st_atimespec);
     TIMESPEC_TO_TIMEVAL(times+1, &nodeData.st_mtimespec);
     u_long flags = nodeData.st_flags;
+#else
+    times[0].tv_sec = nodeData.st_atime;
+    times[1].tv_sec = nodeData.st_mtime;
+    times[0].tv_usec = times[1].tv_usec = 0;
 #endif
 
     if (S_ISDIR(mode))
@@ -51,10 +55,11 @@ void archiveNode(int archive, char* node, char* nodeLZW)
     if (write(archive, node, nodeLen)<nodeLen) SYS_DIE("write");
     // write the mode of this node
     if (write(archive, &mode, sizeof(mode))<sizeof(mode)) SYS_DIE("write");
-#if MAC
+
     // write the times and flags of this node
     int timeSize = sizeof(struct timeval) * 2;
     if (write(archive, times, timeSize)<timeSize) SYS_DIE("write");
+#if MAC
     // write the flags
     if (write(archive, &flags, sizeof(flags))<sizeof(flags)) SYS_DIE("write");
 #endif
@@ -166,11 +171,11 @@ void extract(int archive)
         mode_t mode;
         if (!rdhang(archive, &mode, sizeof(mode)))
             SYS_DIE("Unable to read mode");
-#if MAC
         struct timeval times[2];
         int timeSize = sizeof(struct timeval) * 2;
         if (!rdhang(archive, times, timeSize))
             SYS_DIE("Unable to read timevals");
+#if MAC
         u_long flags;
         if (!rdhang(archive, &flags, sizeof(flags)))
             SYS_DIE("Unable to read flags");
@@ -212,8 +217,8 @@ void extract(int archive)
                 if (chmod(nodeName, mode)) SYS_ERROR("chmod");
 #if MAC
                 if (chflags(nodeName, flags)) SYS_ERROR("chflags");
-                if (utimes(nodeName, times)) SYS_ERROR("utimes");
 #endif
+                if (utimes(nodeName, times)) SYS_ERROR("utimes");
             }
             // check setattrlist(2)
         }
