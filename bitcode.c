@@ -11,9 +11,6 @@
 #include <unistd.h>
 
 // Information shared by putBits() and flushBits()
-static int nExtra = 0;                  // #bits from previous byte(s)
-static unsigned int extraBits = 0;      // Extra bits from previous byte(s)
-
 
 void fdputc(char c, int fd)
 {
@@ -65,7 +62,7 @@ int rdhangPartial(int fd, void* bytes, int len)
 // == PUTBITS MODULE =======================================================
 
 // Write CODE (NBITS bits) to standard output
-void putBits (int nBits, int code, int fd)
+void putBits (int nBits, int code, int fd, BitCache* cache)
 {
     unsigned int c;
 
@@ -73,57 +70,42 @@ void putBits (int nBits, int code, int fd)
     exit (fprintf (stderr, "putBits: nBits = %d too large\n", nBits));
 
     code &= (1 << nBits) - 1;                   // Clear high-order bits
-    nExtra += nBits;                            // Add new bits to extraBits
-    extraBits = (extraBits << nBits) | code;
-    while (nExtra >= CHAR_BIT) {                // Output any whole chars
-        nExtra -= CHAR_BIT;                     //  and save remaining bits
-        c = extraBits >> nExtra;
+    cache->nExtra += nBits;                     // Add new bits to extraBits
+    cache->extraBits = (cache->extraBits << nBits) | code;
+    while (cache->nExtra >= CHAR_BIT) {         // Output any whole chars
+        cache->nExtra -= CHAR_BIT;              //  and save remaining bits
+        c = cache->extraBits >> cache->nExtra;
         fdputc(c, fd);
-        extraBits ^= c << nExtra;
+        cache->extraBits ^= c << cache->nExtra;
     }
 }
 
 // Flush remaining bits to standard output
-void flushBits (int fd)
+void flushBits (int fd, BitCache* cache)
 {
-    if (nExtra != 0)
-        fdputc(extraBits << (CHAR_BIT - nExtra), fd);
-    clearPutBits();
-}
-
-void clearPutBits(void)
-{
-    nExtra = 0;
-    extraBits = 0;
+    if (cache->nExtra != 0)
+        fdputc(cache->extraBits << (CHAR_BIT - cache->nExtra), fd);
 }
 
 // == GETBITS MODULE =======================================================
-static int getNExtra = 0;           // #bits from previous byte(s)
-static unsigned int getExtra = 0;   // Extra bits from previous byte(s)
 
 // Return next code (#bits = NBITS) from input stream or EOF on end-of-file
-int getBits (int nBits, int fd)
+int getBits (int nBits, int fd, BitCache* cache)
 {
     int c;
                                           
-    if (nBits > (sizeof(getExtra)-1) * CHAR_BIT)
+    if (nBits > (sizeof(cache->extraBits)-1) * CHAR_BIT)
     exit (fprintf (stderr, "getBits: nBits = %d too large\n", nBits));
 
     // Read enough new bytes to have at least nBits bits to extract code
-    while (getNExtra < nBits) {
+    while (cache->nExtra < nBits) {
         // Return EOF on end-of-file
-        if ((c = fdgetc(fd)) == EOF) return clearGetBits(), EOF;
-        getNExtra += CHAR_BIT;
-        getExtra = (getExtra << CHAR_BIT) | c;
+        if ((c = fdgetc(fd)) == EOF) return EOF;
+        cache->nExtra += CHAR_BIT;
+        cache->extraBits = (cache->extraBits << CHAR_BIT) | c;
     }
-    getNExtra -= nBits;                            // Return nBits bits
-    c = getExtra >> getNExtra;
-    getExtra ^= c << getNExtra;                       // Save remainder
+    cache->nExtra -= nBits;                            // Return nBits bits
+    c = cache->extraBits >> cache->nExtra;
+    cache->extraBits ^= c << cache->nExtra;            // Save remainder
     return c;
-}
-
-void clearGetBits(void)
-{
-    getNExtra = 0;
-    getExtra = 0;
 }

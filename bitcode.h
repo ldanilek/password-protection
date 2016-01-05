@@ -2,28 +2,29 @@
 //
 // Interface to putBits/getBits
 
+#ifndef BITCODE_H
+#define BITCODE_H
+
 #include <limits.h>
 #include <stdio.h>
 #include <stdbool.h>
 
+// create with {0, 0}
+typedef struct bitCache {
+    int nExtra;                 // #bits from previous byte(s)
+    unsigned int extraBits;     // Extra bits from previous byte(s)
+} BitCache;
+
 // Write code (#bits = nBits) to standard output.
 // [Since bits are written as CHAR_BIT-bit characters, any extra bits are
 //  saved, so that final call must be followed by call to flushBits().]
-void putBits (int nBits, int code, int fd);
+void putBits (int nBits, int code, int fd, BitCache* cache);
 
 // Flush any extra bits to standard output
-void flushBits (int fd);
+void flushBits (int fd, BitCache* cache);
 
 // Return next code (#bits = nBits) from standard input (EOF on end-of-file)
-int getBits (int nBits, int fd);
-
-// Clear the bit cache to start writing to new file next time
-// done automatically on flushBits()
-void clearPutBits(void);
-
-// clear the bit cache to start reading from a new file next time
-// done automatically when getBits() hits EOF
-void clearGetBits(void);
+int getBits (int nBits, int fd, BitCache* cache);
 
 // for getting and putting characters from file descriptors
 // does not cache, so is slow
@@ -40,3 +41,5 @@ bool rdhang(int fd, void* bytes, int len);
 // same as above but allows partial reads and returns the number of bytes read
 // different from read() because will only stop at EOF (not end of pipe)
 int rdhangPartial(int fd, void* bytes, int len);
+
+#endif

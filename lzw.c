@@ -133,7 +133,9 @@ bool encode(int inFile, int outFile)
 {
     STATUS("%s", "Begin encode");
 
-    putBits(COMPRESSED_PREFIX_SIZE, COMPRESSED_PREFIX, outFile);
+    BitCache cache = {0, 0};
+
+    putBits(COMPRESSED_PREFIX_SIZE, COMPRESSED_PREFIX, outFile, &cache);
 
     HashTable table = singleCharacters();
 
@@ -153,7 +155,7 @@ bool encode(int inFile, int outFile)
         {
             if (!whereIsC) DIE("%s", "corrupted file");
 
-            putBits(numBits, C, outFile);
+            putBits(numBits, C, outFile, &cache);
             bitsWritten += numBits;
             //checkTable(table);
             bool didPrune = false;
@@ -202,10 +204,10 @@ bool encode(int inFile, int outFile)
     }
     if (C > 0)
     {
-        putBits(numBits, C, outFile);
+        putBits(numBits, C, outFile, &cache);
         bitsWritten += numBits;
     }
-    flushBits(outFile);
+    flushBits(outFile, &cache);
     bitsWritten += 8;
 
     freeTable(table);
@@ -237,8 +239,8 @@ bool encode(int inFile, int outFile)
 
 void decode(int inFile, int outFile, int bytesToWrite)
 {
-    clearGetBits(); // should be redundant, but just in case
-    int compressed = getBits(COMPRESSED_PREFIX_SIZE, inFile);
+    BitCache cache = {0, 0};
+    int compressed = getBits(COMPRESSED_PREFIX_SIZE, inFile, &cache);
 
     if (!compressed)
     {
@@ -284,7 +286,7 @@ void decode(int inFile, int outFile, int bytesToWrite)
     //fscanf(stdin, "%d:%d:%ld\n", &readNumBits, &newC, &readFrequency)
     int codeIndex = 0;
     int readC = 0;
-    while ((readC = getBits(numBits, inFile)) != EOF)
+    while ((readC = getBits(numBits, inFile, &cache)) != EOF)
     {
         bitsRead += numBits;
 
@@ -358,7 +360,6 @@ void decode(int inFile, int outFile, int bytesToWrite)
     }
 
     alldone: ;
-    clearGetBits();
     freeArray(table);
     freeStack(stack);
     
