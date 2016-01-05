@@ -173,6 +173,71 @@ void unprotectS(char* password, char* archiveName, char* archiveFar)
     if (removeOriginal && remove(archiveName)) SYS_ERROR("remove");
 }
 
+#define USAGE_FORMAT "Usage:\n%s [options] ArchiveName File1 File2 ...\n"
+
+void printFlagsInfo(char* flags, bool decrypt)
+{
+    int len = strlen(flags);
+    for (int i = 0; i < len; i++)
+    {
+        char f = flags[i];
+        char* d;
+        switch (f)
+        {
+            case 'v':
+            {d = "Verbose mode. Prints progress reports."; break;}
+
+            case 'q':
+            {d = "Quiet mode. Only prints fatal errors."; break;}
+
+            case 'p':
+            {d = "Shows password as it is typed."; break;}
+
+            case 'r':
+            {d = decrypt?"Removes archive after completion.":
+                "Removes files after they are processed."; break;}
+
+            case 'i':
+            {d = "Insecure mode. Uses default password."; break;}
+
+            case 's':
+            {d = decrypt?
+                "Series mode. Finishes decryption before beginning decoding":
+                "Series mode. Finishes encoding before beginning encryption";
+                break;}
+
+            default: DIE("Invalid flag to describe: %c", f);
+        }
+        fprintf(stderr, "-%c: %s\n", f, d);
+    }
+}
+
+// does not return, exits
+void showHelpInfo(bool decrypt)
+{
+#ifdef ENCRYPT
+    if (decrypt)
+    {
+        fprintf(stderr, USAGE_FORMAT, "decrypt");
+    }
+    else
+    {
+        fprintf(stderr, USAGE_FORMAT, "encrypt");
+    }
+    printFlagsInfo("rqvpis", decrypt);
+#else
+    if (decrypt)
+    {
+        fprintf(stderr, USAGE_FORMAT, "lzwdecompress");
+    }
+    else
+    {
+        fprintf(stderr, USAGE_FORMAT, "lzwcompress");
+    }
+    printFlagsInfo("rqvs", decrypt);
+#endif
+    exit(0);
+}
 
 int main(int argc, char** argv)
 {
@@ -208,16 +273,16 @@ int main(int argc, char** argv)
             else if (flag[fIndex] == 'v') verbose = true, quiet = false;
 #ifdef ENCRYPT
             else if (flag[fIndex] == 'p') showPassword = true;
+            else if (flag[fIndex] == 'i') defaultPassword = true;
 #endif
             else if (flag[fIndex] == 's') series = true;
-            else if (flag[fIndex] == 'i') defaultPassword = true;
-            else DIE("Invalid flag %c", flag[fIndex]);
+            else showHelpInfo(decrypt);
         }
         flagIndex++;
     }
 
-    if (decrypt && argc-flagIndex < 1) DIE("Invalid decrypt argc: %d", argc);
-    if (!decrypt && argc-flagIndex < 2) DIE("Invalid encrypt argc: %d", argc);
+    if (decrypt && argc-flagIndex < 1) showHelpInfo(decrypt);
+    if (!decrypt && argc-flagIndex < 2) showHelpInfo(decrypt);
 
     // take password as input
     char* password = DEFAULT_PASSWORD;
