@@ -88,36 +88,42 @@ void flushBits (int fd)
 {
     if (nExtra != 0)
         fdputc(extraBits << (CHAR_BIT - nExtra), fd);
+    clearPutBits();
+}
+
+void clearPutBits(void)
+{
     nExtra = 0;
     extraBits = 0;
 }
 
-
 // == GETBITS MODULE =======================================================
+static int getNExtra = 0;           // #bits from previous byte(s)
+static unsigned int getExtra = 0;   // Extra bits from previous byte(s)
 
 // Return next code (#bits = NBITS) from input stream or EOF on end-of-file
 int getBits (int nBits, int fd)
 {
     int c;
-    static int nExtra = 0;          // #bits from previous byte(s)
-    static int unsigned extra = 0;  // Extra bits from previous byte(s)
                                           
-    if (nBits > (sizeof(extra)-1) * CHAR_BIT)
+    if (nBits > (sizeof(getExtra)-1) * CHAR_BIT)
     exit (fprintf (stderr, "getBits: nBits = %d too large\n", nBits));
 
     // Read enough new bytes to have at least nBits bits to extract code
-    while (nExtra < nBits) {
-        if ((c = fdgetc(fd)) == EOF)
-        {
-            extraBits = 0;
-            nExtra = 0; // reset for next file
-            return EOF;                         // Return EOF on end-of-file
-        }
-        nExtra += CHAR_BIT;
-        extra = (extra << CHAR_BIT) | c;
+    while (getNExtra < nBits) {
+        // Return EOF on end-of-file
+        if ((c = fdgetc(fd)) == EOF) return clearGetBits(), EOF;
+        getNExtra += CHAR_BIT;
+        getExtra = (getExtra << CHAR_BIT) | c;
     }
-    nExtra -= nBits;                            // Return nBits bits
-    c = extra >> nExtra;
-    extra ^= c << nExtra;                       // Save remainder
+    getNExtra -= nBits;                            // Return nBits bits
+    c = getExtra >> getNExtra;
+    getExtra ^= c << getNExtra;                       // Save remainder
     return c;
+}
+
+void clearGetBits(void)
+{
+    getNExtra = 0;
+    getExtra = 0;
 }

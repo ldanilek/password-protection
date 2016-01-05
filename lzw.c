@@ -237,7 +237,7 @@ bool encode(int inFile, int outFile)
 
 void decode(int inFile, int outFile, int bytesToWrite)
 {
-    
+    clearGetBits(); // should be redundant, but just in case
     int compressed = getBits(COMPRESSED_PREFIX_SIZE, inFile);
 
     if (!compressed)
@@ -358,6 +358,7 @@ void decode(int inFile, int outFile, int bytesToWrite)
     }
 
     alldone: ;
+    clearGetBits();
     freeArray(table);
     freeStack(stack);
     

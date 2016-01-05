@@ -17,6 +17,14 @@ void flushBits (int fd);
 // Return next code (#bits = nBits) from standard input (EOF on end-of-file)
 int getBits (int nBits, int fd);
 
+// Clear the bit cache to start writing to new file next time
+// done automatically on flushBits()
+void clearPutBits(void);
+
+// clear the bit cache to start reading from a new file next time
+// done automatically when getBits() hits EOF
+void clearGetBits(void);
+
 // for getting and putting characters from file descriptors
 // does not cache, so is slow
 void fdputc(char c, int fd);
