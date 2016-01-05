@@ -9,6 +9,8 @@
  *       but truncates input to length _PASSWORD_LEN (currently 128 characters).
  *       With this flag, allows printable characters as determined by isprint().
  *       Password is terminated by first non-printing character (newline or EOF)
+ *       Whether using this flag or not, Terminal's "Secure Keyboard Entry" is a
+ *       useful feature to block keyloggers and other apps.
  *
  * -q    Quiet mode. Only prints fatal errors.
  *

@@ -240,21 +240,11 @@ void encryptRSA(char* password, int inFile, int outFile)
     //PROGRESS("Encrypting from %s to %s", inputName, outputName);
     STATUS("%s", "Encrypting");
     // find size of file to show nice progress
-    /*
-    struct stat inFileData;
-    if (lstat(inputName, &inFileData)) SYS_ERROR("lstat");
-    off_t inFileSize = inFileData.st_size;
-    */
-    //off_t progressCutoff = inFileSize / MESSAGE_PROGRESS_GROUPS;
-    /*
-    FILE* inFile = fopen(inputName, "r");
-    if (!inFile) SYS_DIE("fopen");
-    FILE* outFile = fopen(outputName, "w");
-    if (!outFile) SYS_DIE("fopen");
-    */
+    
     unsigned char hash[HASH_LEN];
     hashPassword(password, hash);
     if (write(outFile, hash, HASH_LEN) < HASH_LEN) SYS_DIE("write");
+    int totalWritten = HASH_LEN;
 
     bigint n;
     unsigned int nDigits[] = N_DATA;
@@ -281,43 +271,28 @@ void encryptRSA(char* password, int inFile, int outFile)
         int writeLen = c.n;
         if (write(outFile, &writeLen, sizeof(writeLen))<sizeof(writeLen))
             SYS_DIE("write");
+        totalWritten += sizeof(writeLen);
         if (write(outFile, &readLen, sizeof(readLen))<sizeof(readLen))
             SYS_DIE("write");
+        totalWritten += sizeof(readLen);
+        unsigned int dig;
         for (int i = 0; i < writeLen; i++)
         {
-            unsigned int dig = c.digits[i];
+            dig = c.digits[i];
             if (write(outFile, &dig, sizeof(dig))<sizeof(dig)) SYS_DIE("write");
         }
+        totalWritten += sizeof(dig)*writeLen;
         partialProgress += readLen;
         free(c.digits);
-        /*int percent = 100 * partialProgress / inFileSize;
-        if (!quiet && percent > lastPercent)
-        {
-            printf("Encrypt Progress: %d%%\r", percent);
-            fflush(stdout);
-            lastPercent = percent;
-        }*/
     }
-    STATUS("Encrypted %d bytes", partialProgress);
+    STATUS("Encrypted %d bytes into %d bytes", partialProgress, totalWritten);
 }
 
 // m = c^d mod n will convert ciphertext c into message m
 void decryptRSA(char* password, int inFile, int outFile)
 {
     STATUS("%s", "Decrypting");
-    /*
-    PROGRESS("Decrypting from %s to %s", inputName, outputName);
-    fflush(stdout);
-    // find size of file to show nice progress
-    struct stat inFileData;
-    if (lstat(inputName, &inFileData)) SYS_ERROR("lstat");
-    off_t inFileSize = inFileData.st_size;
 
-    FILE* inFile = fopen(inputName, "r");
-    if (!inFile) SYS_DIE("fopen");
-    FILE* outFile = fopen(outputName, "w");
-    if (!outFile) SYS_DIE("fopen");
-    */
     unsigned char hash[HASH_LEN];
     if (!rdhang(inFile, hash, HASH_LEN)) DIE("%s", "EOF at start");
     checkPassword(password, hash);
