@@ -29,6 +29,9 @@
  * -i    Insecure mode. Does not prompt for password, instead using the default
  *       password DEFAULT_PASSWORD defined in keys.h. Overrides -p flag.
  *
+ * -c    Compression/Decompression only. Same as using lzwcompress and
+ *       lzwdecompress when compiled with make compression
+ *
  * Flags may be separated or condensed, so -pq and -pv -q are both valid
  * 
  * The following filenames must be unused
