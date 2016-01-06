@@ -359,7 +359,7 @@ void decode(int inFile, int outFile, int bytesToWrite)
         
     }
 
-    alldone: ;
+    alldone: ; // cleanup code starts here
     freeArray(table);
     freeStack(stack);
     

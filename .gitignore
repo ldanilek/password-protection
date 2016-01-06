@@ -2,5 +2,5 @@
 encrypt
 decrypt
 keys.h
-compress
-decompress
+lzwcompress
+lzwdecompress

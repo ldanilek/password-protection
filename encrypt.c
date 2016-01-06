@@ -31,7 +31,11 @@ bool verbose = false;
 // remove original files (listed files on encrypt, archive on decrypt)
 bool removeOriginal = false;
 // just compress
+#ifdef ENCRYPT
 bool compressionOnly = false;
+#else
+bool compressionOnly = true; // make sure this can never be set to false
+#endif
 
 // only owner has permission for the archive
 // it can be read or (over)written
@@ -47,39 +51,39 @@ void protect(char* password, char* archiveName, char* archiveLZW,
         newFile = open(archiveName,O_WRONLY|O_CREAT|O_TRUNC,ARCHIVE_PERMISSION);
     if (newFile < 0) SYS_DIE("open");
     
-#ifdef ENCRYPT
-if (compressionOnly)
-{
-    archive(newFile, archiveLZW, nodeC, nodes);
-}
-else
-{
-    int archiveToEncryptPipe[2];
-    if (pipe(archiveToEncryptPipe)) SYS_DIE("pipe");
 
-    pid_t archiveProcess = fork();
-    if (archiveProcess < 0) SYS_DIE("fork");
-    if (archiveProcess == 0)
+    if (compressionOnly)
     {
-        if (close(archiveToEncryptPipe[0])) SYS_DIE("close");
-        archive(archiveToEncryptPipe[1], archiveLZW, nodeC, nodes);
-        
-        exit(0);
+        archive(newFile, archiveLZW, nodeC, nodes);
     }
-    // parent process
-    if (close(archiveToEncryptPipe[1])) SYS_DIE("close");
+    else
+    {
+        int archiveToEncryptPipe[2];
+        if (pipe(archiveToEncryptPipe)) SYS_DIE("pipe");
 
-    encryptRSA(password, archiveToEncryptPipe[0], newFile);
-    if (close(archiveToEncryptPipe[0])) SYS_ERROR("close");
-
-    // wait for child process to end (reap it)
-    int archiveStatus = 0;
-    if (waitpid(archiveProcess, &archiveStatus, 0) < 0) SYS_DIE("waitpid");
-    if (archiveStatus)DIE("Archive exited with status %d", STAT(archiveStatus));
-}
-#else
-    archive(newFile, archiveLZW, nodeC, nodes);
+        pid_t archiveProcess = fork();
+        if (archiveProcess < 0) SYS_DIE("fork");
+        if (archiveProcess == 0)
+        {
+            if (close(archiveToEncryptPipe[0])) SYS_DIE("close");
+            archive(archiveToEncryptPipe[1], archiveLZW, nodeC, nodes);
+            
+            exit(0);
+        }
+        // parent process
+        if (close(archiveToEncryptPipe[1])) SYS_DIE("close");
+#ifdef ENCRYPT
+        encryptRSA(password, archiveToEncryptPipe[0], newFile);
 #endif
+        if (close(archiveToEncryptPipe[0])) SYS_ERROR("close");
+
+        // wait for child process to end (reap it)
+        int archiveStatus = 0;
+        if (waitpid(archiveProcess, &archiveStatus, 0) < 0) SYS_DIE("waitpid");
+        if (archiveStatus)
+            DIE("Archive exited with status %d", STAT(archiveStatus));
+    }
+
 
     if (close(newFile)) SYS_ERROR("close");
 }
@@ -93,46 +97,42 @@ void unprotect(char* password, char* archiveName)
         archiveFile = open(archiveName, O_RDONLY);
     if (archiveFile < 0) SYS_DIE("open");
 
-#ifdef ENCRYPT
     int decryptToExtractPipe[2];
     pid_t decryptProcess;
-if (compressionOnly) {
-    extract(archiveFile);
-}
-else
-{
-    if (pipe(decryptToExtractPipe)) SYS_DIE("pipe");
-
-    decryptProcess = fork();
-    if (decryptProcess < 0) SYS_DIE("fork");
-    if (decryptProcess == 0)
-    {
-        if (close(decryptToExtractPipe[0])) SYS_DIE("close");
-
-        decryptRSA(password, archiveFile, decryptToExtractPipe[1]);
-
-        exit(0);
+    if (compressionOnly) {
+        // if not decrypting, just pass archiveFile in to extract
+        extract(archiveFile);
     }
-    if (close(decryptToExtractPipe[1])) SYS_ERROR("close");
-}
-#else
-    // if not decrypting, just pass archiveFile in to extract
-    extract(archiveFile);
+    else
+    {
+        if (pipe(decryptToExtractPipe)) SYS_DIE("pipe");
+
+        decryptProcess = fork();
+        if (decryptProcess < 0) SYS_DIE("fork");
+        if (decryptProcess == 0)
+        {
+            if (close(decryptToExtractPipe[0])) SYS_DIE("close");
+
+// definitely defined, but don't want this part to compile without decryptRSA
+#ifdef ENCRYPT
+            decryptRSA(password, archiveFile, decryptToExtractPipe[1]);
 #endif
+            exit(0);
+        }
+        if (close(decryptToExtractPipe[1])) SYS_ERROR("close");
+    }
     if (close(archiveFile)) SYS_ERROR("close");
 
-#ifdef ENCRYPT
-if (!compressionOnly) {
-    extract(decryptToExtractPipe[0]);
+    if (!compressionOnly) {
+        extract(decryptToExtractPipe[0]);
 
-    if (close(decryptToExtractPipe[0])) SYS_ERROR("close");
+        if (close(decryptToExtractPipe[0])) SYS_ERROR("close");
 
-    // reap the zombie
-    int status = 0;
-    if (waitpid(decryptProcess, &status, 0) < 0) SYS_DIE("waitpid");
-    if (status) DIE("decryptProcess exit status %d", STAT(status));
-}
-#endif
+        // reap the zombie
+        int status = 0;
+        if (waitpid(decryptProcess, &status, 0) < 0) SYS_DIE("waitpid");
+        if (status) DIE("decryptProcess exit status %d", STAT(status));
+    }
 
     if (strcmp(archiveName, "-") && removeOriginal && remove(archiveName))
         SYS_ERROR("remove");
@@ -146,28 +146,27 @@ void protectS(char* password, char* archiveName, char* archiveFar,
     if (strcmp(archiveName, "-"))
         arch = fopen(archiveName, "w");
     if (!arch) SYS_DIE("fopen");
+
+    if (compressionOnly)
+    {
+        archive(fileno(arch), archiveLZW, nodeC, nodes);
+    }
+    else
+    {
+        // archive into far
+        FILE* far = fopen(archiveFar, "w");
+        if (!far) SYS_DIE("fopen");
+        archive(fileno(far), archiveLZW, nodeC, nodes);
+        if (fclose(far)) SYS_ERROR("fclose");
+        // encrypt from far to archive
+        far = fopen(archiveFar, "r");
+        if (!far) SYS_DIE("fopen");
 #ifdef ENCRYPT
-if (compressionOnly)
-{
-    archive(fileno(arch), archiveLZW, nodeC, nodes);
-}
-else
-{
-    // archive into far
-    FILE* far = fopen(archiveFar, "w");
-    if (!far) SYS_DIE("fopen");
-    archive(fileno(far), archiveLZW, nodeC, nodes);
-    if (fclose(far)) SYS_ERROR("fclose");
-    // encrypt from far to archive
-    far = fopen(archiveFar, "r");
-    if (!far) SYS_DIE("fopen");
-    encryptRSA(password, fileno(far), fileno(arch));
-    if (fclose(far)) SYS_ERROR("fclose");
-    if (remove(archiveFar)) SYS_ERROR("remove");
-}
-#else
-    archive(fileno(arch), archiveLZW, nodeC, nodes);
+        encryptRSA(password, fileno(far), fileno(arch));
 #endif
+        if (fclose(far)) SYS_ERROR("fclose");
+        if (remove(archiveFar)) SYS_ERROR("remove");
+    }
     if (fclose(arch)) SYS_ERROR("fclose");
 }
 
@@ -178,29 +177,26 @@ void unprotectS(char* password, char* archiveName, char* archiveFar)
         arch = fopen(archiveName, "r");
     if (!arch) SYS_DIE("fopen");
 
+    if (compressionOnly)
+    {
+        extract(fileno(arch));
+    }
+    else
+    {
+        // decrypt into far
+        FILE* far = fopen(archiveFar, "w");
+        if (!far) SYS_DIE("fopen");
 #ifdef ENCRYPT
-if (compressionOnly)
-{
-    extract(fileno(arch));
-}
-else
-{
-    // decrypt into far
-    FILE* far = fopen(archiveFar, "w");
-    if (!far) SYS_DIE("fopen");
-    decryptRSA(password, fileno(arch), fileno(far));
-    if (fclose(far)) SYS_ERROR("fclose");
-    // extract from far
-    far = fopen(archiveFar, "r");
-    if (!far) SYS_DIE("fopen");
-    extract(fileno(far));
-    if (fclose(far)) SYS_ERROR("fclose");
-    if (remove(archiveFar)) SYS_ERROR("remove");
-}
-#else
-    // extract from arch
-    extract(fileno(arch));
+        decryptRSA(password, fileno(arch), fileno(far));
 #endif
+        if (fclose(far)) SYS_ERROR("fclose");
+        // extract from far
+        far = fopen(archiveFar, "r");
+        if (!far) SYS_DIE("fopen");
+        extract(fileno(far));
+        if (fclose(far)) SYS_ERROR("fclose");
+        if (remove(archiveFar)) SYS_ERROR("remove");
+    }
 
     if (fclose(arch)) SYS_ERROR("fclose");
     if (removeOriginal && remove(archiveName)) SYS_ERROR("remove");
@@ -254,24 +250,10 @@ void printFlagsInfo(char* flags, bool decrypt)
 void showHelpInfo(bool decrypt)
 {
 #ifdef ENCRYPT
-    if (decrypt)
-    {
-        fprintf(stderr, USAGE_FORMAT, "decrypt");
-    }
-    else
-    {
-        fprintf(stderr, USAGE_FORMAT, "encrypt");
-    }
+    fprintf(stderr, USAGE_FORMAT, decrypt ? "decrypt" : "encrypt");
     printFlagsInfo("rqvpisc", decrypt);
 #else
-    if (decrypt)
-    {
-        fprintf(stderr, USAGE_FORMAT, "lzwdecompress");
-    }
-    else
-    {
-        fprintf(stderr, USAGE_FORMAT, "lzwcompress");
-    }
+    fprintf(stderr, USAGE_FORMAT, decrypt ? "lzwdecompress" : "lzwcompress");
     printFlagsInfo("rqvs", decrypt);
 #endif
     exit(0);
@@ -282,20 +264,17 @@ int main(int argc, char** argv)
     // find which program to run
     bool decrypt;
     char* progName = basename(argv[0]);
-    if (!strcmp(progName, "encrypt") || !strcmp(progName, "lzwcompress"))
-    {
-        decrypt = false;
-    }
-    else if (!strcmp(progName, "decrypt") || !strcmp(progName, "lzwdecompress"))
-    {
-        decrypt = true;
-    }
+#ifdef ENCRYPT
+    if (!strcmp(progName, "encrypt")) decrypt = false;
+    else if (!strcmp(progName, "decrypt")) decrypt = true;
+#else
+    if (!strcmp(progName, "lzwcompress")) decrypt = false;
+    else if (!strcmp(progName, "lzwdecompress")) decrypt = true;
+#endif
     else DIE("Invalid program name %s", argv[0]);
 
     // determine which flags are set
-#ifdef ENCRYPT
     bool showPassword = false;
-#endif
     bool series = false;
     bool defaultPassword = false;
     int flagIndex = 1;
@@ -325,11 +304,8 @@ int main(int argc, char** argv)
 
     // take password as input
     char* password = DEFAULT_PASSWORD;
-    if (!defaultPassword)
+    if (!defaultPassword && !compressionOnly)
     {
-#ifdef ENCRYPT
-if (!compressionOnly)
-{
 #if MAC
         if (showPassword)
         {
@@ -381,8 +357,6 @@ if (!compressionOnly)
             password = getpass(PASSWORD_PROMPT);
         }
 #endif
-}
-#endif
     }
 
     char* archiveName = argv[flagIndex];
@@ -424,12 +398,7 @@ if (!compressionOnly)
         }
     }
 
-#ifdef ENCRYPT
-if (!compressionOnly)
-{
-    if (!defaultPassword && showPassword) free(password);
-}
-#endif
+    if (!compressionOnly && !defaultPassword && showPassword) free(password);
 }
 
 
