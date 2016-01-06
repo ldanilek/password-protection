@@ -394,9 +394,9 @@ int main(int argc, char** argv)
             // Encrypt
             protect(password, archiveName, archiveLZW,
                 argc-flagIndex-1, argv+flagIndex+1);
-            free(archiveLZW);
         }
     }
+    free(archiveLZW);
 
     if (!compressionOnly && !defaultPassword && showPassword) free(password);
 }
