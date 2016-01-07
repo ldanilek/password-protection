@@ -109,3 +109,23 @@ int getBits (int nBits, int fd, BitCache* cache)
     cache->extraBits ^= c << cache->nExtra;            // Save remainder
     return c;
 }
+
+char* byteCount(double* size)
+{
+    if (*size > 1000000000.0)
+    {
+        *size /= 1000000000.0;
+        return "GB";
+    }
+    if (*size > 1000000.0)
+    {
+        *size /= 1000000.0;
+        return "MB";
+    }
+    if (*size > 1000.0)
+    {
+        *size /= 1000.0;
+        return "KB";
+    }
+    return "B";
+}

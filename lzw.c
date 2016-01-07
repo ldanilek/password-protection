@@ -196,13 +196,20 @@ bool encode(int inFile, int outFile)
 
     freeTable(table);
 
+    double bytesWrittenDouble = bytesWritten;
+    double bytesReadDouble = bytesRead;
+    char* writeUnits = byteCount(&bytesWrittenDouble);
+    char* readUnits = byteCount(&bytesReadDouble);
+
     // if the encoded version is bigger, go with the other
     if (bytesWritten > bytesRead)
     {
-        PROGRESS("%llu < %llu: use uncompressed file", bytesRead, bytesWritten);
+        PROGRESS("%g%s < %g%s: use uncompressed file", bytesReadDouble,
+            readUnits, bytesWrittenDouble, writeUnits);
         return false;
     }
-    PROGRESS("Encoded %llu bytes into %llu bytes", bytesRead, bytesWritten);
+    PROGRESS("Encoded %g%s into %g%s", bytesReadDouble,
+            readUnits, bytesWrittenDouble, writeUnits);
     return true;
 }
 
@@ -336,7 +343,11 @@ void decode(int inFile, int outFile, int bytesToWrite)
     // bitsRead doesn't include the cache.nExtra bits which were just read
     //bitsRead += cache.nExtra;
     unsigned long long bytesRead = (bitsRead+cache.nExtra) / CHAR_BIT;
-    
-    PROGRESS("Decode %llu bytes into %llu bytes", bytesRead, bytesWritten);
+    double bytesReadDouble = bytesRead;
+    char* readUnits = byteCount(&bytesReadDouble);
+    double bytesWrittenDouble = bytesWritten;
+    char* writeUnits = byteCount(&bytesWrittenDouble);
+    PROGRESS("Decode %g%s into %lg%s", bytesReadDouble, readUnits,
+        bytesWrittenDouble, writeUnits);
 }
 

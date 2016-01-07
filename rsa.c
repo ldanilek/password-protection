@@ -305,7 +305,12 @@ void encryptRSA(char* password, int inFile, int outFile)
         free(c.digits);
     }
     mpz_clear(n);
-    STATUS("Encrypted %d bytes into %d bytes", partialProgress, totalWritten);
+    double bytesWrittenDouble = totalWritten;
+    double bytesReadDouble = partialProgress;
+    char* writeUnits = byteCount(&bytesWrittenDouble);
+    char* readUnits = byteCount(&bytesReadDouble);
+    STATUS("Encrypted %g%s into %g%s", bytesReadDouble, readUnits,
+        bytesWrittenDouble, writeUnits);
 }
 
 // m = c^d mod n will convert ciphertext c into message m
@@ -367,6 +372,11 @@ void decryptRSA(char* password, int inFile, int outFile)
     }
     mpz_clear(n);
     mpz_clear(d);
-    STATUS("Decrypted %d bytes to yield %d bytes",partialProgress,bytesWritten);
+    double bytesWrittenDouble = bytesWritten;
+    double bytesReadDouble = partialProgress;
+    char* writeUnits = byteCount(&bytesWrittenDouble);
+    char* readUnits = byteCount(&bytesReadDouble);
+    STATUS("Decrypted %g%s to yield %g%s", bytesReadDouble, readUnits,
+        bytesWrittenDouble, writeUnits);
 }
 

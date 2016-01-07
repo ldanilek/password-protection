@@ -42,4 +42,7 @@ bool rdhang(int fd, void* bytes, int len);
 // different from read() because will only stop at EOF (not end of pipe)
 int rdhangPartial(int fd, void* bytes, int len);
 
+// returns static constant string like "MB" or "KB"
+char* byteCount(double* bytes);
+
 #endif
