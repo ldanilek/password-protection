@@ -199,63 +199,78 @@ bigint convertMPZ(mpz_t a)
 }
 
 // computes b^e mod n
-bigint bigModularExponential(bigint b, bigint e, bigint n)
+bigint bigModularExponential(bigint b, mpz_t e, mpz_t n)
 {
-    mpz_t base, exp, mod;
+    mpz_t base;
     convertBigint(base, b);
-    convertBigint(exp, e);
-    convertBigint(mod, n);
     mpz_t rop;
     mpz_init(rop);
-    mpz_powm(rop, base, exp, mod); // this is where the magic happens
+    mpz_powm(rop, base, e, n); // this is where the magic happens
 
     bigint result = convertMPZ(rop);
     mpz_clear(base);
-    mpz_clear(exp);
-    mpz_clear(mod);
     mpz_clear(rop);
     return result;
 }
 
 // computes b^e mod n
-bigint modularExponential(bigint b, unsigned int e, bigint n)
+bigint modularExponential(bigint b, unsigned int e, mpz_t n)
 {
-    mpz_t base, mod;
+    mpz_t base;
     convertBigint(base, b);
     unsigned long int exp = e;
-    convertBigint(mod, n);
     mpz_t rop;
     mpz_init(rop);
-    mpz_powm_ui(rop, base, exp, mod); // this is where the magic happens
+    mpz_powm_ui(rop, base, exp, n); // this is where the magic happens
 
     bigint result = convertMPZ(rop);
     mpz_clear(base);
-    mpz_clear(mod);
     mpz_clear(rop);
     return result;
 }
 
 #define MESSAGE_PROGRESS_GROUPS (30)
 
+void getN(mpz_t mod)
+{
+    bigint n;
+    unsigned int nDigits[] = N_DATA;
+    unsigned int nHiders[] = N_HIDE;
+    n.digits = nDigits;
+    n.n = N_SIZE;
+    for (int i = 0; i < n.n; i++) nDigits[i] ^= nHiders[i];
+    // convert to mpz here; conversion may be slow
+    convertBigint(mod, n);
+}
+
+void getD(mpz_t d)
+{
+    bigint dInt;
+    unsigned int dData[] = D_DATA;
+    unsigned int dHiders[] = D_HIDE;
+    dInt.digits = dData;
+    dInt.n = D_SIZE;
+    for (int i = 0; i < dInt.n; i++) dData[i] ^= dHiders[i];
+    convertBigint(d, dInt);
+}
+
 // c = m^e mod n will convert message m into ciphertext c
 void encryptRSA(char* password, int inFile, int outFile)
 {
     //PROGRESS("Encrypting from %s to %s", inputName, outputName);
     STATUS("%s", "Encrypting");
-    // find size of file to show nice progress
     
     unsigned char hash[HASH_LEN];
     hashPassword(password, hash);
     if (write(outFile, hash, HASH_LEN) < HASH_LEN) SYS_DIE("write");
     int totalWritten = HASH_LEN;
 
-    bigint n;
-    unsigned int nDigits[] = N_DATA;
-    n.digits = nDigits;
-    n.n = N_SIZE;
+    mpz_t n;
+    getN(n);
 
     unsigned int eDigits[] = E_DATA;
-    unsigned int e = eDigits[0];
+    unsigned int eHider[] = E_HIDE;
+    unsigned int e = eDigits[0]^eHider[0];
     if (E_SIZE > 1) DIE("e is too big: %d > 1", E_SIZE);
 
     //PROGRESS_PART("Fetch/Encrypt/Write Progress: ");
@@ -265,7 +280,7 @@ void encryptRSA(char* password, int inFile, int outFile)
     {
         int readLen = 0;
         //PROGRESS("%s", "Fetching message");
-        bigint m = makeMessage(inFile, n.n-3, &readLen, &reachedEOF);
+        bigint m = makeMessage(inFile, N_SIZE-3, &readLen, &reachedEOF);
         //PROGRESS("%s", "Encrypting message");
         //printDigits("to encrypt", m);
         bigint c = modularExponential(m, e, n);
@@ -288,6 +303,7 @@ void encryptRSA(char* password, int inFile, int outFile)
         partialProgress += readLen;
         free(c.digits);
     }
+    mpz_clear(n);
     STATUS("Encrypted %d bytes into %d bytes", partialProgress, totalWritten);
 }
 
@@ -300,15 +316,9 @@ void decryptRSA(char* password, int inFile, int outFile)
     if (!rdhang(inFile, hash, HASH_LEN)) DIE("%s", "EOF at start");
     checkPassword(password, hash);
 
-    bigint d;
-    unsigned int dData[] = D_DATA;
-    d.digits = dData;
-    d.n = D_SIZE;
-
-    bigint n;
-    unsigned int nDigits[] = N_DATA;
-    n.digits = nDigits;
-    n.n = N_SIZE;
+    mpz_t n, d;
+    getN(n);
+    getD(d);
 
     int partialProgress = HASH_LEN;
     int bytesWritten = 0;
@@ -354,6 +364,8 @@ void decryptRSA(char* password, int inFile, int outFile)
         bytesWritten += writeLen;
         free(m.digits);
     }
+    mpz_clear(n);
+    mpz_clear(d);
     STATUS("Decrypted %d bytes to yield %d bytes",partialProgress,bytesWritten);
 }
 

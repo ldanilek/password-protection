@@ -14,11 +14,15 @@ BASE = 1<<(BYTE_GROUP*8)
 
 def writeDefinitions(name, number):
     parts = []
+    hideParts = []
     while number > 0:
-        parts.append(str(number % BASE))
+        hide = random.randint(1, BASE-1)
+        hideParts.append(str(hide))
+        parts.append(str((number % BASE)^hide))
         number /= BASE
     f.write("#define "+name+"_SIZE ("+str(len(parts))+")\n")
     f.write("#define "+name+"_DATA {"+", ".join(parts)+"}\n")
+    f.write("#define "+name+"_HIDE {"+", ".join(hideParts)+"}\n")
 
 # reference: https://www.daniweb.com/programming/software-development/code/216880/check-if-a-number-is-a-prime-number-python
 def isPrime(n,PROB):
