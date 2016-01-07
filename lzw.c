@@ -11,7 +11,7 @@
 
 #define INITIAL_NUM_BITS 9
 #define MAX_BITS 20
-#define COMPRESSED_PREFIX_SIZE 8
+#define COMPRESSED_PREFIX_SIZE CHAR_BIT
 #define COMPRESSED_PREFIX 100
 
 struct stack {
@@ -113,7 +113,7 @@ int minBitsToRepresent(int code)
 
 bool encode(int inFile, int outFile)
 {
-    STATUS("%s", "Begin encode");
+    PROGRESS("%s", "Begin encode");
 
     BitCache cache = {0, 0};
 
@@ -189,9 +189,9 @@ bool encode(int inFile, int outFile)
         putBits(numBits, C, outFile, &cache);
         bitsWritten += numBits;
     }
-    bitsWritten += cache.nExtra;
-    unsigned long long bytesWritten = bitsWritten / 8;
-    if (bitsWritten % 8) bytesWritten++;
+    // bitsWritten includes the cache.nExtra bits not actually written yet
+    // but does not pad to the byte
+    unsigned long long bytesWritten = bitsWritten / CHAR_BIT + !!(bitsWritten % CHAR_BIT);
     flushBits(outFile, &cache);
 
     freeTable(table);
@@ -216,7 +216,7 @@ void decode(int inFile, int outFile, int bytesToWrite)
 
     if (!compressed)
     {
-        STATUS("%s", "Archive is not encoded");
+        PROGRESS("%s", "Archive is not encoded");
         int c = 0;
         int bytesWritten = 0;
 
@@ -333,10 +333,10 @@ void decode(int inFile, int outFile, int bytesToWrite)
     freeArray(table);
     freeStack(stack);
 
-    bitsRead += cache.nExtra;
-    unsigned long long bytesRead = bitsRead / 8;
-    if (bitsRead % 8) bytesRead++;
+    // bitsRead doesn't include the cache.nExtra bits which were just read
+    //bitsRead += cache.nExtra;
+    unsigned long long bytesRead = (bitsRead+cache.nExtra) / CHAR_BIT;
     
-    STATUS("Decode %llu bytes into %llu bytes", bytesRead, bytesWritten);
+    PROGRESS("Decode %llu bytes into %llu bytes", bytesRead, bytesWritten);
 }
 

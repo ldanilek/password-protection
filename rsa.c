@@ -142,7 +142,7 @@ bigint makeMessage(int inFile, int goal, int* totalBytes, bool* reachedEOF)
         for (int i = 0; i < BYTE_GROUP; i++)
         {
             // shift over to make room for this BYTE (8 bits)
-            accumulator <<= 8;
+            accumulator <<= CHAR_BIT;
             accumulator += bytes[i];
             //PROGRESS("read byte %d", (int)bytes[i]);
         }
