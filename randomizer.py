@@ -7,10 +7,15 @@ characters = input("char count: ")
 
 file = open(fileName, "w")
 
+minChar = 32
+maxChar = 126
+
+minChar = 97
+maxChar = 99
 
 meta = []
 # add in the printable characters
-for i in range(32, 127):
+for i in range(minChar, maxChar+1):
     meta += [str(chr(i))]
 
 for i in range(characters):

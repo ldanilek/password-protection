@@ -64,10 +64,9 @@ Security of this program is based on the following assumptions:
 
 Listed are a few constants you can change to trade security for speed.
 
-* pBits and qBits in keygenerator.py, which will change the length of the RSA keys
+* pBits and qBits in keygenerator.py, which will change the length of the RSA keys. Longer keys are more secure and make each step of encryption slower, but the cleartext is divided into chucks of size approximately pBits+qBits, so longer keys means fewer steps of encryption.
 * assurance in keygenerator.py, which will change the probablility that p and q are prime (necessary for RSA to be secure)
 * SALT_LEN in rsa.c will change the length of the password salt
-* MESSAGE_PROGRESS_GROUPS in rsa.c will change the number of asterisks printed while encrypting/decrypting
 * MAX_BITS in lzw.c will change the maximum size of the prefix table, which will affect compression factors
 
 # Todo

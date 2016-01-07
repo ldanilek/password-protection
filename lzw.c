@@ -50,27 +50,8 @@ char popStack(CharStack stack)
     return stack->elements[--stack->count];
 }
 
-// returns the code where it was inserted or found (probably nextCode)
-// adds recursively a code and all of its prefixes
-int insertFrequentCode(HashTable table, Array array, int code, int* nextCode)
-{
-    ArrayElement elt = *searchArray(array, code);
-    if (elt.PREF == 0) return code;
-    // if the code is in the table, all of its prefixes are too
-    Node node;
-    if ((node = searchTable(table, elt.PREF, elt.CHAR)))
-    {
-        return node->elt.CODE;
-    }
-    int prefixCode = insertFrequentCode(table, array, elt.PREF, nextCode);
-    Element hashElement;
-    hashElement.CODE = *nextCode;
-    hashElement.PREF = prefixCode;
-    hashElement.CHAR = elt.CHAR;
-    hashElement.frequency = elt.frequency - 1;
-    insertIntoTable(table, hashElement);
-    return (*nextCode)++;
-}
+// there must be at least one code with frequency <= PRUNE_USED
+#define PRUNE_USED (1)
 
 // easier to prune as array because want to look up the prefixes
 // easier to output as table because don't want duplicate (PREF, CHAR)
@@ -78,22 +59,23 @@ int insertFrequentCode(HashTable table, Array array, int code, int* nextCode)
 HashTable pruneTable(Array array)
 {
     HashTable table = makeTable();
+    int mapping[array->count+1]; // mapping[i]=j where old code i is new code j
+    mapping[0] = 0; // EMPTY is still the same
     int nextCode = 1;
     for (int i = 0; i < array->count; i++)
     {
         ArrayElement elt = array->elements[i];
+        int eltCode = i + 1;
         Element hashElement;
         hashElement.frequency = 0;
-        if (elt.PREF == 0)
+        if (elt.PREF == 0 || elt.frequency > PRUNE_USED)
         {
-            hashElement.PREF = 0;
+            hashElement.PREF = mapping[elt.PREF];
             hashElement.CHAR = elt.CHAR;
-            hashElement.CODE = nextCode++;
+            mapping[eltCode] = hashElement.CODE = nextCode++;
+            // if elt.PREF == 0, its frequency has no effect so it can be neg
+            hashElement.frequency = elt.frequency - PRUNE_USED;
             insertIntoTable(table, hashElement);
-        }
-        else if (elt.frequency > 1)
-        {
-            insertFrequentCode(table, array, i+1, &nextCode);
         }
     }
     PROGRESS("LZW table pruned, %d of %d codes remain",
