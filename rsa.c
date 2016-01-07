@@ -1,4 +1,3 @@
-#include "keys.h"
 #include "rsa.h"
 #include "encrypt.h"
 #include <stdio.h>
@@ -13,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <unistd.h>
+#include "keys.h"
 
 //#define PMPZ(num) mpz_out_str(stdout,10,(num))
 //#define PROG_MPZ(name,num) if(verbose)printf(name ": "),PMPZ(num),printf("\n")
@@ -40,6 +40,8 @@ bool arraysAreEqual(unsigned char* one, unsigned char* two, int n)
 // if password doesn't match hash, program dies
 void checkPassword(char* password, unsigned char* hash)
 {
+    bool useDefault = !password;
+    if (useDefault) password = DEFAULT_PASSWORD;
     // password is null-terminated
     int passwordLength = strlen(password);
     // hash is HASH_LEN == SALT_LEN+SHA_DIGEST_LENGTH characters long
@@ -65,7 +67,8 @@ void checkPassword(char* password, unsigned char* hash)
     else
     {
         // zero password
-        for (int i = 0; i < passwordLength; i++) password[i] = '\0';
+        if (!useDefault)
+            for (int i = 0; i < passwordLength; i++) password[i] = '\0';
         PROGRESS("%s", "Password correct");
     }
 }
@@ -75,22 +78,20 @@ void checkPassword(char* password, unsigned char* hash)
 void hashPassword(char* password, unsigned char* hash)
 {
     PROGRESS("%s", "Generating password hash");
+    bool useDefault = !password;
+    if (useDefault) password = DEFAULT_PASSWORD;
     int passwordLength = strlen(password);
     // generate random salt
     unsigned char saltedPassword[SALT_LEN+passwordLength];
     for (int i = 0; i < SALT_LEN; i++)
     {
-#if MAC
-        unsigned char random = arc4random_uniform(UCHAR_MAX + 1);
-#else
         unsigned char random = rand() % (UCHAR_MAX + 1);
-#endif
         hash[i] = saltedPassword[i] = random;
     }
     for (int i = 0; i < passwordLength; i++)
     {
         saltedPassword[i + SALT_LEN] = password[i];
-        password[i] = '\0';
+        if (!useDefault) password[i] = '\0';
     }
 
     SHA1(saltedPassword, SALT_LEN+passwordLength, hash + SALT_LEN);

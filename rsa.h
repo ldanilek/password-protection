@@ -6,6 +6,8 @@
 #ifndef RSA
 #define RSA
 
+// password will be zeroed ASAP. password NULL is DEFAULT_PASSWORD (not zeroed)
+
 // reads from file descriptor inFile, writes to file descriptor outFile
 void encryptRSA(char* password, int inFile, int outFile);
 

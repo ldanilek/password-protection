@@ -7,7 +7,6 @@
 #endif
 #include <libgen.h>
 #include <ctype.h>
-#include "keys.h"
 #include <termios.h>
 #include <string.h>
 #include <stdlib.h>
@@ -309,8 +308,7 @@ int main(int argc, char** argv)
     if (!decrypt && argc-flagIndex < 2) showHelpInfo(decrypt);
 
     // take password as input
-    char* insecurePassword = strdup(DEFAULT_PASSWORD); // dup because will zero
-    char* password = insecurePassword;
+    char* password = NULL;
     if (!defaultPassword && !compressionOnly)
     {
         // terminal input
@@ -393,7 +391,6 @@ int main(int argc, char** argv)
     free(archiveLZW);
 
     if (!compressionOnly && !defaultPassword) free(password);
-    free(insecurePassword);
 }
 
 
