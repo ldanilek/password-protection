@@ -8,11 +8,7 @@
 #include <libgen.h>
 #include <ctype.h>
 #include "keys.h"
-#if MAC
-#else
 #include <termios.h>
-#endif
-
 #include <string.h>
 #include <stdlib.h>
 #include <pwd.h>
@@ -313,19 +309,14 @@ int main(int argc, char** argv)
     if (!decrypt && argc-flagIndex < 2) showHelpInfo(decrypt);
 
     // take password as input
-    char* insecurePassword = strdup(DEFAULT_PASSWORD);
+    char* insecurePassword = strdup(DEFAULT_PASSWORD); // dup because will zero
     char* password = insecurePassword;
     if (!defaultPassword && !compressionOnly)
     {
-#if MAC
-        if (showPassword)
-        {
-#endif
         // terminal input
         FILE* devtty = fopen("/dev/tty", "r");
         FILE* passread = devtty ? devtty : stdin;
-#if MAC
-#else
+
         struct termios TermConf;
         if (tcgetattr(fileno(passread), &TermConf)) SYS_ERROR("tcgetattr");
         if (!showPassword)
@@ -334,40 +325,32 @@ int main(int argc, char** argv)
             if (tcsetattr(fileno(passread), TCSANOW, &TermConf))
                 SYS_ERROR("tcsetattr");
         }
-#endif
-            int capacity = 5;
-            password = calloc(capacity, sizeof(char));
-            int count = 0;
-            int c;
-            fprintf(stderr, PASSWORD_PROMPT);
-            
-            while (isprint(c = fgetc(passread)))
-            {
-                if (count+1 >= capacity)
-                {
-                    capacity*=2;
-                    password = realloc(password, capacity*sizeof(char));
-                }
-                password[count++] = c;
-            }
-#if MAC
-#else
-            if (!showPassword)
-            {
-                TermConf.c_lflag |= ECHO;
-                if (tcsetattr(fileno(passread), TCSANOW, &TermConf))
-                    SYS_ERROR("tcsetattr");
-            }
-#endif
-            if (devtty && fclose(devtty)) SYS_ERROR("fclose");
-            password[count] = '\0';
-#if MAC
-        }
-        else
+
+        int capacity = 5;
+        password = calloc(capacity, sizeof(char));
+        int count = 0;
+        int c;
+        fprintf(stderr, PASSWORD_PROMPT);
+        
+        while (isprint(c = fgetc(passread)))
         {
-            password = getpass(PASSWORD_PROMPT);
+            if (count+1 >= capacity)
+            {
+                capacity*=2;
+                password = realloc(password, capacity*sizeof(char));
+            }
+            password[count++] = c;
         }
-#endif
+
+        if (!showPassword)
+        {
+            TermConf.c_lflag |= ECHO;
+            if (tcsetattr(fileno(passread), TCSANOW, &TermConf))
+                SYS_ERROR("tcsetattr");
+        }
+
+        if (devtty && fclose(devtty)) SYS_ERROR("fclose");
+        password[count] = '\0';
     }
 
     char* archiveName = argv[flagIndex];
@@ -409,7 +392,7 @@ int main(int argc, char** argv)
     }
     free(archiveLZW);
 
-    if (!compressionOnly && !defaultPassword && showPassword) free(password);
+    if (!compressionOnly && !defaultPassword) free(password);
     free(insecurePassword);
 }
 
