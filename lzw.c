@@ -189,30 +189,20 @@ bool encode(int inFile, int outFile)
         putBits(numBits, C, outFile, &cache);
         bitsWritten += numBits;
     }
+    bitsWritten += cache.nExtra;
+    unsigned long long bytesWritten = bitsWritten / 8;
+    if (bitsWritten % 8) bytesWritten++;
     flushBits(outFile, &cache);
-    bitsWritten += 8;
 
     freeTable(table);
 
     // if the encoded version is bigger, go with the other
-    if (bitsWritten/8 > bytesRead)
+    if (bytesWritten > bytesRead)
     {
-        STATUS("%s", "Encoding increases size, so use uncompressed file");
+        PROGRESS("%llu < %llu: use uncompressed file", bytesRead, bytesWritten);
         return false;
     }
-    STATUS("Encoded %llu bytes into %llu bytes", bytesRead, bitsWritten/8);
-    /*
-    else
-    {
-        STATUS("Encoding from %s to %s: 100%%", inputName, outputName);
-        fflush(stdout);
-        struct stat outputStats;
-        if (lstat(outputName, &outputStats)) SYS_DIE("lstat");
-        off_t outSize = outputStats.st_size;
-        if (remove(inputName)) SYS_ERROR("remove");
-        PROGRESS("Compressed %lld bytes into %lld bytes", inSize, outSize);
-    }
-    */
+    PROGRESS("Encoded %llu bytes into %llu bytes", bytesRead, bytesWritten);
     return true;
 }
 
@@ -296,13 +286,11 @@ void decode(int inFile, int outFile, int bytesToWrite)
         }
         finalK = ARRAYCHAR(C);
         fdputc(finalK, outFile);
-        bytesWritten++;
-        if (bytesWritten >= bytesToWrite) goto alldone;
+        if (++bytesWritten >= bytesToWrite) goto alldone;
         while (stack->count)
         {
             fdputc(popStack(stack), outFile);
-            bytesWritten++;
-            if (bytesWritten >= bytesToWrite) goto alldone;
+            if (++bytesWritten >= bytesToWrite) goto alldone;
         }
         if (oldC)
         {
@@ -344,7 +332,11 @@ void decode(int inFile, int outFile, int bytesToWrite)
     alldone: ; // cleanup code starts here
     freeArray(table);
     freeStack(stack);
+
+    bitsRead += cache.nExtra;
+    unsigned long long bytesRead = bitsRead / 8;
+    if (bitsRead % 8) bytesRead++;
     
-    STATUS("Decode %llu bytes into %llu bytes", bitsRead/8, bytesWritten);
+    STATUS("Decode %llu bytes into %llu bytes", bytesRead, bytesWritten);
 }
 

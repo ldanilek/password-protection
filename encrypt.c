@@ -345,6 +345,10 @@ int main(int argc, char** argv)
             TermConf.c_lflag |= ECHO;
             if (tcsetattr(fileno(passread), TCSANOW, &TermConf))
                 SYS_ERROR("tcsetattr");
+            // I just swallowed the newline
+            FILE* writetty = fopen("/dev/tty", "w");
+            fprintf(writetty ? writetty : stdout, "\n");
+            if (writetty && fclose(writetty)) SYS_ERROR("fclose");
         }
 
         if (devtty && fclose(devtty)) SYS_ERROR("fclose");
