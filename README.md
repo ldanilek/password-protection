@@ -50,7 +50,7 @@ This mode does not require GMP or openssl (the only nonstandard libraries used).
 * ```lzwcompress [options] ArchiveName File1 File2 ...```
 * ```lzwdecompress [options] ArchiveName```
 
-See encrypt.h for description of flags and restrictions. In compression-only mode, the -p flag is not allowed.
+See encrypt.h for description of flags and restrictions. In compression-only mode, the -p, -i, and -c flags are not allowed.
 
 # Assumptions
 

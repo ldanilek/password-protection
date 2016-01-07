@@ -64,6 +64,8 @@ void checkPassword(char* password, unsigned char* hash)
     }
     else
     {
+        // zero password
+        for (int i = 0; i < passwordLength; i++) password[i] = '\0';
         PROGRESS("%s", "Password correct");
     }
 }
@@ -88,6 +90,7 @@ void hashPassword(char* password, unsigned char* hash)
     for (int i = 0; i < passwordLength; i++)
     {
         saltedPassword[i + SALT_LEN] = password[i];
+        password[i] = '\0';
     }
 
     SHA1(saltedPassword, SALT_LEN+passwordLength, hash + SALT_LEN);

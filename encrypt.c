@@ -41,6 +41,16 @@ bool compressionOnly = true; // make sure this can never be set to false
 // it can be read or (over)written
 #define ARCHIVE_PERMISSION (0600)
 
+#if MAC
+#else
+char* strdup(const char* s1)
+{
+    char* dup = malloc(strlen(s1) + 1);
+    strcpy(dup, s1);
+    return dup;
+}
+#endif
+
 // doesn't have to worry about encoding, since archive() takes care of that
 // uses a child process to archive/encode and encrypts in the parent
 void protect(char* password, char* archiveName, char* archiveLZW,
@@ -97,8 +107,8 @@ void unprotect(char* password, char* archiveName)
         archiveFile = open(archiveName, O_RDONLY);
     if (archiveFile < 0) SYS_DIE("open");
 
-    int decryptToExtractPipe[2];
-    pid_t decryptProcess;
+    int decryptToExtractPipe[2] = {0, 0};
+    pid_t decryptProcess = 0;
     if (compressionOnly) {
         // if not decrypting, just pass archiveFile in to extract
         extract(archiveFile);
@@ -303,7 +313,8 @@ int main(int argc, char** argv)
     if (!decrypt && argc-flagIndex < 2) showHelpInfo(decrypt);
 
     // take password as input
-    char* password = DEFAULT_PASSWORD;
+    char* insecurePassword = strdup(DEFAULT_PASSWORD);
+    char* password = insecurePassword;
     if (!defaultPassword && !compressionOnly)
     {
 #if MAC
@@ -399,6 +410,7 @@ int main(int argc, char** argv)
     free(archiveLZW);
 
     if (!compressionOnly && !defaultPassword && showPassword) free(password);
+    free(insecurePassword);
 }
 
 
