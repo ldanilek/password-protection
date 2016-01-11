@@ -28,11 +28,13 @@ void archiveNode(int archive, char* node, char* nodeLZW)
     mode_t mode = nodeData.st_mode;
     // store these so they can be restored
     struct timeval times[2];
+    // default value so encrypt on linux (no flags) can be decrypted on mac
+    u_long flags = 0;
 #if MAC
     // pretty sure this one doesn't work
     TIMESPEC_TO_TIMEVAL(times, &nodeData.st_atimespec);
     TIMESPEC_TO_TIMEVAL(times+1, &nodeData.st_mtimespec);
-    u_long flags = nodeData.st_flags;
+    flags = nodeData.st_flags;
 #else
     times[0].tv_sec = nodeData.st_atime;
     times[1].tv_sec = nodeData.st_mtime;
@@ -59,10 +61,8 @@ void archiveNode(int archive, char* node, char* nodeLZW)
     // write the times and flags of this node
     int timeSize = sizeof(struct timeval) * 2;
     if (write(archive, times, timeSize)<timeSize) SYS_DIE("write");
-#if MAC
     // write the flags
     if (write(archive, &flags, sizeof(flags))<sizeof(flags)) SYS_DIE("write");
-#endif
 
     if (S_ISDIR(mode))
     {
@@ -77,11 +77,7 @@ void archiveNode(int archive, char* node, char* nodeLZW)
         {
             if (!strcmp(subnode->d_name, ".") || !strcmp(subnode->d_name, ".."))
                 continue;
-#if MAC
-            int nameLen = subnode->d_namlen;
-#else
             int nameLen = strlen(subnode->d_name);
-#endif
             if (nameLen >= 4 && strcmp(subnode->d_name+nameLen-4, ".lzw")==0)
                 continue;
             char* subNodePath = calloc(nodeLen + nameLen + 2, 1);
@@ -175,11 +171,9 @@ void extract(int archive)
         int timeSize = sizeof(struct timeval) * 2;
         if (!rdhang(archive, times, timeSize))
             SYS_DIE("Unable to read timevals");
-#if MAC
         u_long flags;
         if (!rdhang(archive, &flags, sizeof(flags)))
             SYS_DIE("Unable to read flags");
-#endif
         // extract all prefix directories
         bool errorExtractingParents = false;
         for (int i=0; i < nodeNameLen; i++)
@@ -198,6 +192,7 @@ void extract(int archive)
             }
         }
         if (errorExtractingParents) continue;
+        // done extracting prefix directories. now nodeName should be available
         if (nodeName[nodeNameLen-1] != '/')
         {
             // directories should be already taken care of
@@ -211,17 +206,15 @@ void extract(int archive)
             // decode into the file
             decode(archive, fileno(file), size);
 
-            if (file)
-            {
-                if (fclose(file)) SYS_ERROR("fclose");
-                if (chmod(nodeName, mode)) SYS_ERROR("chmod");
-#if MAC
-                if (chflags(nodeName, flags)) SYS_ERROR("chflags");
-#endif
-                if (utimes(nodeName, times)) SYS_ERROR("utimes");
-            }
+            if (file && fclose(file)) SYS_ERROR("fclose");
             // check setattrlist(2)
         }
+        if (chmod(nodeName, mode)) SYS_ERROR("chmod");
+#if MAC
+        if (chflags(nodeName, flags)) SYS_ERROR("chflags");
+#endif
+        if (utimes(nodeName, times)) SYS_ERROR("utimes");
+
         PROGRESS("Finished extraction of node %s", nodeName);
     }
 

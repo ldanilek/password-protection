@@ -14,6 +14,8 @@
 #define COMPRESSED_PREFIX_SIZE CHAR_BIT
 #define COMPRESSED_PREFIX 100
 
+#define EMPTY (0)
+
 struct stack {
     char* elements;
     int capacity;
@@ -60,7 +62,7 @@ HashTable pruneTable(Array array)
 {
     HashTable table = makeTable();
     int mapping[array->count+1]; // mapping[i]=j where old code i is new code j
-    mapping[0] = 0; // EMPTY is still the same
+    mapping[EMPTY] = EMPTY; // EMPTY is still the same
     int nextCode = 1;
     for (int i = 0; i < array->count; i++)
     {
@@ -68,7 +70,7 @@ HashTable pruneTable(Array array)
         int eltCode = i + 1;
         Element hashElement;
         hashElement.frequency = 0;
-        if (elt.PREF == 0 || elt.frequency > PRUNE_USED)
+        if (elt.PREF == EMPTY || elt.frequency > PRUNE_USED)
         {
             hashElement.PREF = mapping[elt.PREF];
             hashElement.CHAR = elt.CHAR;
@@ -92,7 +94,7 @@ HashTable singleCharacters(void)
     {
         Element elt;
         elt.CHAR = i;
-        elt.PREF = 0;
+        elt.PREF = EMPTY;
         elt.CODE = code++;
         elt.frequency = 0;
         insertIntoTable(table, elt);
@@ -124,7 +126,7 @@ bool encode(int inFile, int outFile)
     int nextCode = table->count + 1;
     int numBits = minBitsToRepresent(table->count);
 
-    int C = 0;
+    int C = EMPTY;
     int K;
     Node whereIsC = NULL;
     unsigned long long bytesRead = 0;
@@ -177,21 +179,22 @@ bool encode(int inFile, int outFile)
                 insertIntoTable(table, elt);
             }
             
-            lookup = searchTable(table, 0, K);
+            lookup = searchTable(table, EMPTY, K);
             if (!lookup) DIE("lone character %c DNE", K);
         }
         C = lookup->elt.CODE;
         whereIsC = lookup;
         whereIsC->elt.frequency++;
     }
-    if (C > 0)
+    if (C != EMPTY)
     {
         putBits(numBits, C, outFile, &cache);
         bitsWritten += numBits;
     }
     // bitsWritten includes the cache.nExtra bits not actually written yet
     // but does not pad to the byte
-    unsigned long long bytesWritten = bitsWritten / CHAR_BIT + !!(bitsWritten % CHAR_BIT);
+    unsigned long long bytesWritten = bitsWritten / CHAR_BIT
+    + !!(bitsWritten % CHAR_BIT);
     flushBits(outFile, &cache);
 
     freeTable(table);
@@ -224,7 +227,7 @@ void decode(int inFile, int outFile, int bytesToWrite)
     if (!compressed)
     {
         PROGRESS("%s", "Archive is not encoded");
-        int c = 0;
+        int c;
         int bytesWritten = 0;
 
         if (bytesToWrite == 0) return; // make sure to test with empty files
@@ -255,7 +258,7 @@ void decode(int inFile, int outFile, int bytesToWrite)
 
     CharStack stack = makeStack();
 
-    int oldC = 0;
+    int oldC = EMPTY;
     int newC, C;
     char finalK = 0;
     int numBits = minBitsToRepresent(table->count);
@@ -264,14 +267,14 @@ void decode(int inFile, int outFile, int bytesToWrite)
     //long readFrequency;
     //fscanf(stdin, "%d:%d:%ld\n", &readNumBits, &newC, &readFrequency)
     int codeIndex = 0;
-    int readC = 0;
+    int readC = EMPTY;
     while ((readC = getBits(numBits, inFile, &cache)) != EOF)
     {
         bitsRead += numBits;
 
         C = newC = readC;
-        if (readC == 0) C = newC = 1<<numBits;
-        if (C <= 0) DIE("Invalid code %d", C);
+        if (readC == EMPTY) C = newC = 1<<numBits;
+        if (C <= EMPTY) DIE("Invalid code %d", C);
         //if (!C) fprintf(stderr, "uh oh");
         codeIndex++;
         if (C > table->count+1) {
@@ -325,7 +328,7 @@ void decode(int inFile, int outFile, int bytesToWrite)
                 //printf("\nprune\n");
                 //printf("size after pruning: %d\n", pruned->count);
                 //checkTable(pruned);
-                oldC = 0;
+                oldC = EMPTY;
                 freeArray(table);
                 table = convertToArray(pruned);
                 freeTable(pruned);
@@ -347,7 +350,7 @@ void decode(int inFile, int outFile, int bytesToWrite)
     char* readUnits = byteCount(&bytesReadDouble);
     double bytesWrittenDouble = bytesWritten;
     char* writeUnits = byteCount(&bytesWrittenDouble);
-    PROGRESS("Decode %g%s into %lg%s", bytesReadDouble, readUnits,
+    PROGRESS("Decode %g%s into %g%s", bytesReadDouble, readUnits,
         bytesWrittenDouble, writeUnits);
 }
 

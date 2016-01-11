@@ -11,7 +11,7 @@ minChar = 32
 maxChar = 126
 
 minChar = 97
-maxChar = 99
+maxChar = 100
 
 meta = []
 # add in the printable characters
