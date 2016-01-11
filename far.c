@@ -176,7 +176,7 @@ void extract(int archive)
             SYS_DIE("Unable to read flags");
         // extract all prefix directories
         bool errorExtractingParents = false;
-        for (int i=0; i < nodeNameLen; i++)
+        for (int i=1; i < nodeNameLen; i++)
         {
             if (nodeName[i] == '/')
             {
@@ -184,6 +184,7 @@ void extract(int archive)
                 mkdir(nodeName, mode);
                 if (errno != EEXIST && errno != 0)
                 {
+                    if(!quiet) fprintf(stderr, "mkdir(%s)\n", nodeName);
                     SYS_ERROR("mkdir");
                     errorExtractingParents = true;
                     break;
