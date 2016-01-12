@@ -7,6 +7,7 @@ Uses techniques from problem sets across multiple universities:
     * Far for the archiving of multiple files and directories into one file
     * LZW for the compression of that file, and using two names for the same program
     * Bsh for the multiprocessing of the three stages and piping between them
+    * CRC (lecture, not problem set) for the verification of each file
 * Harvard's CS50
     * Crypto for the salted hashing of passwords
 * Dartmouth's CS1
