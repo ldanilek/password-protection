@@ -80,6 +80,7 @@
 extern bool quiet;
 extern bool verbose;
 extern bool removeOriginal;
+extern bool series;
 
 #define EXIT_FAILURE 1
 

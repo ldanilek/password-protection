@@ -102,40 +102,57 @@ void archiveNode(int archive, char* node, char* nodeLZW)
         int encoded = open(nodeLZW, O_WRONLY|O_CREAT|O_TRUNC, 0600);
         if (encoded < 0) SYS_ERR_DONE("open lzw");
 
-        // compute CRC and pipe file to encode
-        int computeCRCToEncodePipe[2];
-        if (pipe(computeCRCToEncodePipe)) SYS_DIE("pipe");
-
         bool didEncode = true;
+        checktype checksum;
 
-        pid_t encodeProcess = fork();
-        if (encodeProcess < 0) SYS_DIE("fork");
-        if (encodeProcess == 0)
+        if (series)
         {
-            if (close(computeCRCToEncodePipe[1])) SYS_DIE("close");
-            // encode this file
-            PROGRESS("Encoding %s to %s", node, nodeLZW);
-            didEncode = encode(computeCRCToEncodePipe[0], encoded);
-            PROGRESS("Encoding %s complete", node);
+            checksum = computeCRC(file, -1);
+            if (fclose(file)) SYS_DIE("fclose");
+            file = fopen(node, "r");
+            if (!file) SYS_DIE("fopen");
+            didEncode = encode(fileno(file), encoded);
+        }
+        else
+        {
+            // compute CRC and pipe file to encode
+            int computeCRCToEncodePipe[2];
+            if (pipe(computeCRCToEncodePipe)) SYS_DIE("pipe");
 
-            exit(didEncode ? 0 : UNCOMPRESSABLE);
+            pid_t encodeProcess = fork();
+            if (encodeProcess < 0) SYS_DIE("fork");
+            if (encodeProcess == 0)
+            {
+                if (close(computeCRCToEncodePipe[1])) SYS_DIE("close");
+                // encode this file
+                PROGRESS("Encoding %s to %s", node, nodeLZW);
+                didEncode = encode(computeCRCToEncodePipe[0], encoded);
+                PROGRESS("Encoding %s complete", node);
+
+                exit(didEncode ? 0 : UNCOMPRESSABLE);
+            }
+
+            if (close(computeCRCToEncodePipe[0])) SYS_ERROR("close");
+
+            checksum = computeCRC(file, computeCRCToEncodePipe[1]);
+            if (close(computeCRCToEncodePipe[1])) SYS_DIE("close");
+
+            int encodeStatus = 0;
+            if (waitpid(encodeProcess, &encodeStatus, 0) < 0)
+                SYS_DIE("waitpid");
+
+            if (STAT(encodeStatus) == UNCOMPRESSABLE) didEncode = false;
+            else if (encodeStatus) DIE("Encode status %d", STAT(encodeStatus));
+
         }
 
-        if (close(computeCRCToEncodePipe[0])) SYS_ERROR("close");
-
-        checktype checksum = computeCRC(file, computeCRCToEncodePipe[1]);
-        if (fclose(file)) SYS_ERROR("fclose");
-        if (close(computeCRCToEncodePipe[1])) SYS_DIE("close");
-
         if (write(archive, &checksum, sizeof(checksum)) < sizeof(checksum))
-            SYS_DIE("write");
+                SYS_DIE("write");
 
-        int encodeStatus = 0;
-        if (waitpid(encodeProcess, &encodeStatus, 0) < 0) SYS_DIE("waitpid");
+        if (fclose(file)) SYS_ERROR("fclose");
+        if (close(encoded)) SYS_ERROR("close");
 
-        if (STAT(encodeStatus) == UNCOMPRESSABLE) didEncode = false;
-        else if (encodeStatus) DIE("Encode status %d", STAT(encodeStatus));
-
+        
         if (didEncode)
         {
             // write from nodeLZW to archive
@@ -174,7 +191,8 @@ void archive(int archive, char* nodeLZW, int nodeC, char** nodes)
 {
     STATUS("%s", "Archiving");
 
-    for (int i = 0; i < nodeC; i++) archiveNode(archive, nodes[i], nodeLZW);
+    for (int i = 0; i < nodeC; i++)
+        archiveNode(archive, nodes[i], nodeLZW);
 
     PROGRESS("%s", "Archive complete");
 }
@@ -231,35 +249,47 @@ void extract(int archive)
                 DIE("%s", "Unable to read size");
 
             checktype checksum;
+            bool check = false;
             if (!rdhang(archive, &checksum, sizeof(checksum)))
                 DIE("%s", "Unable to read checksum");
 
             FILE* file = fopen(nodeName, "w");
             if (!file) SYS_ERROR("fopen"); // permissions error
 
-            // decode in another process, piping results to CRC check
-            int decodeToCheckPipe[2];
-            if (pipe(decodeToCheckPipe)) SYS_DIE("pipe");
-
-            pid_t decodeProcess = fork();
-            if (decodeProcess < 0) SYS_DIE("fork");
-            if (decodeProcess == 0)
+            if (series)
             {
-                if (close(decodeToCheckPipe[0])) SYS_DIE("close");
-                // decode into the pipe
-                decode(archive, decodeToCheckPipe[1], size);
-                exit(0); // sends EOF, so check until EOF
+                decode(archive, fileno(file), size);
+                if (fclose(file)) SYS_ERROR("fclose");
+                file = fopen(nodeName, "r");
+                check = checkCRC(fileno(file), NULL, checksum);
             }
-            
-            if (close(decodeToCheckPipe[1])) SYS_DIE("close");
-            bool check = checkCRC(decodeToCheckPipe[0], file, checksum);
-            if (!check) DIE("%s", "Cyclic Redundancy Check failed");
+            else
+            {
+                // decode in another process, piping results to CRC check
+                int decodeToCheckPipe[2];
+                if (pipe(decodeToCheckPipe)) SYS_DIE("pipe");
 
-            if (close(decodeToCheckPipe[0])) SYS_ERROR("close");
-            // process is already dead, because checkCRC() finished; reap zombie
-            int status = 0;
-            if (waitpid(decodeProcess, &status, 0) < 0)
-            if (status) DIE("Status of decodeProcess is %d", status);
+                pid_t decodeProcess = fork();
+                if (decodeProcess < 0) SYS_DIE("fork");
+                if (decodeProcess == 0)
+                {
+                    if (close(decodeToCheckPipe[0])) SYS_DIE("close");
+                    // decode into the pipe
+                    decode(archive, decodeToCheckPipe[1], size);
+                    exit(0); // sends EOF, so check until EOF
+                }
+                
+                if (close(decodeToCheckPipe[1])) SYS_DIE("close");
+                check = checkCRC(decodeToCheckPipe[0], file, checksum);
+
+                if (close(decodeToCheckPipe[0])) SYS_ERROR("close");
+                // process is already dead, because checkCRC() finished; reap
+                int status = 0;
+                if (waitpid(decodeProcess, &status, 0) < 0)
+                if (status) DIE("Status of decodeProcess is %d", status);
+            }
+
+            if (!check) DIE("%s", "Cyclic Redundancy Check failed");
 
             if (file && fclose(file)) SYS_ERROR("fclose");
             // check setattrlist(2)

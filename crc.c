@@ -51,7 +51,7 @@ checktype computeCRC(FILE* inFile, int outFile)
     while ((c = fgetc(inFile)) != EOF)
     {
         appendCharToMessage(&message, c);
-        fdputc(c, outFile);
+        if (outFile >= 0) fdputc(c, outFile);
     }
     padMessage(&message);
     PROGRESS("Cyclic Redundancy Check has value " CHECKTYPE_FORMAT, message);
@@ -65,7 +65,7 @@ bool checkCRC(int inFile, FILE* outFile, checktype checksum)
     while ((c = fdgetc(inFile)) != EOF)
     {
         appendCharToMessage(&message, c);
-        fputc(c, outFile);
+        if (outFile) fputc(c, outFile);
     }
     padMessage(&message);
     if (message != checksum)

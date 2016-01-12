@@ -29,6 +29,8 @@ bool compressionOnly = false;
 #else
 bool compressionOnly = true; // make sure this can never be set to false
 #endif
+// execute parts in sequence, without extra processes
+bool series = false;
 
 // only owner has permission for the archive
 // it can be read or (over)written
@@ -278,7 +280,7 @@ int main(int argc, char** argv)
 
     // determine which flags are set
     bool showPassword = false;
-    bool series = false;
+    
     bool defaultPassword = false;
     int flagIndex = 1;
     while (flagIndex < argc && argv[flagIndex][0] == '-')
