@@ -17,8 +17,6 @@
 
 #define PASSWORD_PROMPT "Input password: "
 
-#define STAT(x) (WIFEXITED(x) ? WEXITSTATUS(x) : 128+WTERMSIG(x))
-
 // quiet mode
 bool quiet = false;
 // verbose mode

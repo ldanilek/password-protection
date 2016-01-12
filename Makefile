@@ -4,7 +4,7 @@ DEFS = -DENCRYPT
 CC = gcc
 
 # flags to pass compiler
-CFLAGS = -O3 -std=c99 -Wall -Werror -I/usr/local/include $(DEFS)
+CFLAGS = -O0 -ggdb3 -std=c99 -Wall -Werror -I/usr/local/include $(DEFS)
 
 # name for executable
 EXE = encrypt
@@ -13,9 +13,9 @@ EXE = encrypt
 # each of which should be prefixed with -l
 LIBS = -lgmp -lssl -lcrypto
 
-C_SRCS = encrypt.c far.c bitcode.c stringtable.c stringarray.c lzw.c
+C_SRCS = encrypt.c far.c bitcode.c stringtable.c stringarray.c lzw.c crc.c
 
-C_HDRS = encrypt.h far.h stringarray.h stringtable.h lzw.h bitcode.h
+C_HDRS = encrypt.h far.h stringarray.h stringtable.h lzw.h bitcode.h crc.h
 
 # space-separated list of header files
 HDRS = $(C_HDRS) keys.h rsa.h

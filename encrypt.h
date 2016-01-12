@@ -104,4 +104,6 @@ extern bool removeOriginal;
 // fatal system error
 #define SYS_DIE(name) perror(name),exit(EXIT_FAILURE)
 
+#define STAT(x) (WIFEXITED(x) ? WEXITSTATUS(x) : 128+WTERMSIG(x))
+
 #endif

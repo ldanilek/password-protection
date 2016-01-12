@@ -7,7 +7,7 @@
 #include "bitcode.h"
 #include <stdio.h>
 
-#define UNCOMPRESSABLE 5
+#define UNCOMPRESSABLE (5)
 
 // output will begin with a one bit
 // does not increase size of file
