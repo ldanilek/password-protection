@@ -8,8 +8,11 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+typedef unsigned long long checktype;
+#define CHECKTYPE_FORMAT "%llu"
+
 // returns CRC to check
-unsigned int computeCRC(FILE* inFile, int outFile);
+checktype computeCRC(FILE* inFile, int outFile);
 
 // input checksum returned by computeCRC
-bool checkCRC(int inFile, FILE* outFile, unsigned int checksum);
+bool checkCRC(int inFile, FILE* outFile, checktype checksum);

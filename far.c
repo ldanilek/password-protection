@@ -123,7 +123,7 @@ void archiveNode(int archive, char* node, char* nodeLZW)
 
         if (close(computeCRCToEncodePipe[0])) SYS_ERROR("close");
 
-        unsigned int checksum = computeCRC(file, computeCRCToEncodePipe[1]);
+        checktype checksum = computeCRC(file, computeCRCToEncodePipe[1]);
         if (fclose(file)) SYS_ERROR("fclose");
         if (close(computeCRCToEncodePipe[1])) SYS_DIE("close");
 
@@ -230,7 +230,7 @@ void extract(int archive)
             if (!rdhang(archive, &size, sizeof(size)))
                 DIE("%s", "Unable to read size");
 
-            unsigned int checksum;
+            checktype checksum;
             if (!rdhang(archive, &checksum, sizeof(checksum)))
                 DIE("%s", "Unable to read checksum");
 
