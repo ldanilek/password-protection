@@ -4,3 +4,5 @@ decrypt
 keys.h
 lzwcompress
 lzwdecompress
+decodeLog.lzw
+encodeLog.lzw

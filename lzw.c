@@ -14,6 +14,8 @@
 #define COMPRESSED_PREFIX_SIZE CHAR_BIT
 #define COMPRESSED_PREFIX 100
 
+#define TEST_LZW
+
 #define EMPTY (0)
 
 struct stack {
@@ -51,6 +53,16 @@ char popStack(CharStack stack)
 {
     return stack->elements[--stack->count];
 }
+
+#ifdef TEST_LZW
+CharStack stringForCode(Array table, int code)
+{
+    if (!code) return makeStack();
+    CharStack stack = stringForCode(table, ARRAYPREF(code));
+    pushStack(stack, ARRAYCHAR(code));
+    return stack;
+}
+#endif
 
 // there must be at least one code with frequency <= PRUNE_USED
 #define PRUNE_USED (1)
@@ -113,9 +125,38 @@ int minBitsToRepresent(int code)
     return numBits;
 }
 
+#ifdef TEST_LZW
+void logArray(FILE* logFile, Array array)
+{
+    for (int i = 0; i < array->count; i++)
+    {
+        ArrayElement element = array->elements[i];
+        if (element.frequency)
+        {
+            CharStack string = stringForCode(array, i+1);
+            pushStack(string, '\0');
+            fprintf(logFile, "%d: %s has frequency %ld\n", 
+                i + 1, string->elements, element.frequency);
+            freeStack(string);
+        }
+    }
+}
+
+void logTable(FILE* logFile, HashTable table)
+{
+    Array array = convertToArray(table);
+    logArray(logFile, array);
+    freeArray(array);
+}
+#endif
+
 bool encode(int inFile, int outFile)
 {
     PROGRESS("%s", "Begin encode");
+
+#ifdef TEST_LZW
+    FILE* logFile = fopen("encodeLog.lzw", "w");
+#endif
 
     BitCache cache = {0, 0};
 
@@ -140,6 +181,9 @@ bool encode(int inFile, int outFile)
             if (!whereIsC) DIE("%s", "corrupted file");
 
             putBits(numBits, C, outFile, &cache);
+#ifdef TEST_LZW
+            fprintf(logFile, "Code %d\n", C);
+#endif
             bitsWritten += numBits;
             //checkTable(table);
             bool didPrune = false;
@@ -177,6 +221,9 @@ bool encode(int inFile, int outFile)
                 elt.CODE = nextCode++;
                 elt.frequency = 0;
                 insertIntoTable(table, elt);
+#ifdef TEST_LZW
+                logTable(logFile, table);
+#endif
             }
             
             lookup = searchTable(table, EMPTY, K);
@@ -189,6 +236,9 @@ bool encode(int inFile, int outFile)
     if (C != EMPTY)
     {
         putBits(numBits, C, outFile, &cache);
+#ifdef TEST_LZW
+        fprintf(logFile, "Code %d\n", C);
+#endif
         bitsWritten += numBits;
     }
     // bitsWritten includes the cache.nExtra bits not actually written yet
@@ -213,14 +263,17 @@ bool encode(int inFile, int outFile)
     }
     PROGRESS("Encoded %g%s into %g%s", bytesReadDouble,
             readUnits, bytesWrittenDouble, writeUnits);
+#ifdef TEST_LZW
+    fclose(logFile);
+#endif
     return true;
 }
 
-#define ARRAYPREF(C) (table->elements[(C)-1].PREF)
-#define ARRAYCHAR(C) (table->elements[(C)-1].CHAR)
-
 void decode(int inFile, int outFile, int bytesToWrite)
 {
+#ifdef TEST_LZW
+    FILE* logFile = fopen("decodeLog.lzw", "w");
+#endif
     BitCache cache = {0, 0};
     int compressed = getBits(COMPRESSED_PREFIX_SIZE, inFile, &cache);
 
@@ -270,6 +323,9 @@ void decode(int inFile, int outFile, int bytesToWrite)
     int readC = EMPTY;
     while ((readC = getBits(numBits, inFile, &cache)) != EOF)
     {
+#ifdef TEST_LZW
+        fprintf(logFile, "Code %d\n", readC);
+#endif
         bitsRead += numBits;
 
         C = newC = readC;
@@ -290,26 +346,33 @@ void decode(int inFile, int outFile, int bytesToWrite)
         while (ARRAYPREF(C))
         {
             ArrayElement* elt = searchArray(table, C);
-            elt->frequency++;
+            elt->frequency++; // increase frequency of prefix
             pushStack(stack, ARRAYCHAR(C));
             C = ARRAYPREF(C);
         }
+        // increase frequency of single character at C
+        searchArray(table, C)->frequency++;
+
         finalK = ARRAYCHAR(C);
         fdputc(finalK, outFile);
-        if (++bytesWritten >= bytesToWrite) goto alldone;
+        if (++bytesWritten >= bytesToWrite) break;
         while (stack->count)
         {
             fdputc(popStack(stack), outFile);
-            if (++bytesWritten >= bytesToWrite) goto alldone;
+            if (++bytesWritten >= bytesToWrite) break;
         }
+        if (bytesWritten >= bytesToWrite) break;
         if (oldC)
         {
             ArrayElement elt;
             elt.PREF = oldC;
             elt.CHAR = finalK;
-            elt.frequency = kwkwk ? 1 : 0;
+            elt.frequency = !!kwkwk;
             insertIntoArray(table, elt);
         }
+#ifdef TEST_LZW
+        logArray(logFile, table);
+#endif
         //justPruned = false;
         oldC = newC;
 
@@ -339,7 +402,7 @@ void decode(int inFile, int outFile, int bytesToWrite)
         
     }
 
-    alldone: ; // cleanup code starts here
+    // cleanup code starts here
     freeArray(table);
     freeStack(stack);
 
@@ -352,5 +415,8 @@ void decode(int inFile, int outFile, int bytesToWrite)
     char* writeUnits = byteCount(&bytesWrittenDouble);
     PROGRESS("Decode %g%s into %g%s", bytesReadDouble, readUnits,
         bytesWrittenDouble, writeUnits);
+#ifdef TEST_LZW
+    fclose(logFile);
+#endif
 }
 

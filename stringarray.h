@@ -5,11 +5,13 @@
 #include <limits.h>
 #include "stringtable.h"
 
+#define ARRAYPREF(C) (table->elements[(C)-1].PREF)
+#define ARRAYCHAR(C) (table->elements[(C)-1].CHAR)
+
 // maximum size of a string table is 2^20
 // therefore use int safely to store all
 // codes, indices, counts, and capacities
 
-// if change this definition, make sure to check the -i flag
 typedef struct {
     int PREF;
     char CHAR;
