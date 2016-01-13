@@ -182,7 +182,7 @@ bool encode(int inFile, int outFile)
 
             putBits(numBits, C, outFile, &cache);
 #ifdef TEST_LZW
-            fprintf(logFile, "Code %d\n", C);
+            fprintf(logFile, "Code %d with %d bits\n", C, numBits);
 #endif
             bitsWritten += numBits;
             //checkTable(table);
@@ -237,7 +237,7 @@ bool encode(int inFile, int outFile)
     {
         putBits(numBits, C, outFile, &cache);
 #ifdef TEST_LZW
-        fprintf(logFile, "Code %d\n", C);
+        fprintf(logFile, "Code %d with %d bits\n", C, numBits);
 #endif
         bitsWritten += numBits;
     }
@@ -324,12 +324,15 @@ void decode(int inFile, int outFile, int bytesToWrite)
     while ((readC = getBits(numBits, inFile, &cache)) != EOF)
     {
 #ifdef TEST_LZW
-        fprintf(logFile, "Code %d\n", readC);
+        fprintf(logFile, "Code %d with %d bits\n", readC, numBits);
 #endif
         bitsRead += numBits;
 
         C = newC = readC;
-        if (readC == EMPTY) C = newC = 1<<numBits;
+        if (readC == EMPTY)
+        {
+            C = newC = 1<<numBits;
+        }
         if (C <= EMPTY) DIE("Invalid code %d", C);
         //if (!C) fprintf(stderr, "uh oh");
         codeIndex++;
@@ -389,7 +392,6 @@ void decode(int inFile, int outFile, int bytesToWrite)
                 HashTable pruned = pruneTable(table);
                 //justPruned = true;
                 //printf("\nprune\n");
-                //printf("size after pruning: %d\n", pruned->count);
                 //checkTable(pruned);
                 oldC = EMPTY;
                 freeArray(table);
