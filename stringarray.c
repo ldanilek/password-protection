@@ -48,7 +48,7 @@ ArrayElement* searchArray(Array array, int code)
 Array convertToArray(HashTable table)
 {
     Array array = calloc(sizeof(*array), 1);
-    array->capacity = table->count;
+    array->capacity = table->count + 1;
     array->elements = calloc(sizeof(ArrayElement), array->capacity);
     array->count = table->count;
     for (int i = 0; i < table->capacity; i++)
