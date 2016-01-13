@@ -9,8 +9,8 @@
 #include "encrypt.h"
 #include <sys/stat.h>
 
-#define INITIAL_NUM_BITS 9
-#define MAX_BITS 20
+#define INITIAL_NUM_BITS 2
+#define MAX_BITS (24)
 #define COMPRESSED_PREFIX_SIZE CHAR_BIT
 #define COMPRESSED_PREFIX 100
 
@@ -64,7 +64,6 @@ CharStack stringForCode(Array table, int code)
 }
 #endif
 
-// there must be at least one code with frequency <= PRUNE_USED
 #define PRUNE_USED (1)
 
 // easier to prune as array because want to look up the prefixes
@@ -100,6 +99,7 @@ HashTable pruneTable(Array array)
 // takes single characters and puts them in HashTable 
 HashTable singleCharacters(void)
 {
+    /*
     int code = 1;
     HashTable table = makeTable();
     for (int i = 0; i < 256; i++)
@@ -111,8 +111,8 @@ HashTable singleCharacters(void)
         elt.frequency = 0;
         insertIntoTable(table, elt);
     }
-    
-    return table;
+    */
+    return makeTable();
 }
 
 int minBitsToRepresent(int code)
@@ -150,6 +150,50 @@ void logTable(FILE* logFile, HashTable table)
 }
 #endif
 
+#define NEXT_CODE(table) (((table)->count)+1)
+
+// call this right before adding a new code to the table
+bool maybePruneTable(HashTable* table, int* numBits)
+{
+    // increase the number of bits
+    // if the next code can't be represented
+    int nextCode = NEXT_CODE(*table);
+    if ((nextCode+1 > (1<<(*numBits))) && (++(*numBits) > MAX_BITS))
+    {
+        //checkTable(table);
+        Array array = convertToArray(*table);
+        //checkArray(arrayVersion);
+        freeTable(*table);
+        *table = pruneTable(array);
+        //checkTable(table);
+        *numBits = minBitsToRepresent((*table)->count);
+        freeArray(array);
+        //fprintf(stderr, "numBits increased to %d\n", numBits);
+        return true;
+    }
+    return false;
+}
+
+// call this right before adding a new code to the table
+bool maybePruneArray(Array* table, int* numBits)
+{
+    if (((*table)->count >= (1<<(*numBits)) - 1) && (++(*numBits) > MAX_BITS))
+    {
+        //printf("\nprune\n");
+        // prune here
+        HashTable pruned = pruneTable(*table);
+        //justPruned = true;
+        //printf("\nprune\n");
+        //checkTable(pruned);
+        freeArray(*table);
+        *table = convertToArray(pruned);
+        freeTable(pruned);
+        *numBits = minBitsToRepresent((*table)->count);
+        return true;
+    }
+    return false;
+}
+
 bool encode(int inFile, int outFile)
 {
     PROGRESS("%s", "Begin encode");
@@ -164,7 +208,6 @@ bool encode(int inFile, int outFile)
 
     HashTable table = singleCharacters();
 
-    int nextCode = table->count + 1;
     int numBits = minBitsToRepresent(table->count);
 
     int C = EMPTY;
@@ -175,6 +218,37 @@ bool encode(int inFile, int outFile)
     while ((K = fdgetc(inFile)) != EOF)
     {
         bytesRead++;
+        if (!searchTable(table, EMPTY, K))
+        {
+            if (C)
+            {
+#ifdef TEST_LZW
+                fprintf(logFile, "Code %d with %d bits\n", C, numBits);
+                logTable(logFile, table);
+#endif
+                putBits(numBits, C, outFile, &cache);
+            }
+            putBits(numBits, 0, outFile, &cache);
+#ifdef TEST_LZW
+            fprintf(logFile, "Code %d with %d bits\n", 0, numBits);
+#endif
+            putBits(CHAR_BIT, (unsigned char)K, outFile, &cache);
+            bitsWritten+=numBits + CHAR_BIT;
+            Element elt;
+            elt.PREF = EMPTY;
+            elt.CHAR = K;
+            elt.CODE = NEXT_CODE(table);
+            PROGRESS("Assign new char %d to code %d", K, elt.CODE);
+            maybePruneTable(&table, &numBits);
+            elt.frequency = 1;
+            insertIntoTable(table, elt);
+            C = EMPTY;
+            whereIsC = NULL;
+#ifdef TEST_LZW
+            logTable(logFile, table);
+#endif
+            continue;
+        }
         Node lookup = searchTable(table, C, K);
         if (!lookup)
         {
@@ -185,40 +259,15 @@ bool encode(int inFile, int outFile)
             fprintf(logFile, "Code %d with %d bits\n", C, numBits);
 #endif
             bitsWritten += numBits;
+
             //checkTable(table);
-            bool didPrune = false;
-            // increase the number of bits
-            // if the next code can't be represented
-            if (nextCode+1 > (1<<numBits))
-            {
-                // C is the last code sent and dealt with
-                // the value of C doesn't matter at all anymore
-                // will be reading with the old number of bits
-                // until receive code 0
-                // send a 0 to signify the numBits is increasing.
-                //putBits(numBits, 0);
-                numBits++;
-                if (numBits > MAX_BITS)
-                {
-                    //checkTable(table);
-                    Array array = convertToArray(table);
-                    //checkArray(arrayVersion);
-                    freeTable(table);
-                    table = pruneTable(array);
-                    //checkTable(table);
-                    nextCode = table->count+1;
-                    numBits = minBitsToRepresent(table->count);
-                    freeArray(array);
-                    didPrune = true;
-                }
-                //fprintf(stderr, "numBits increased to %d\n", numBits);
-            }
-            if (!didPrune)
+            bool pruned = maybePruneTable(&table, &numBits);
+            if (!pruned)
             {
                 Element elt;
                 elt.PREF = C;
                 elt.CHAR = K;
-                elt.CODE = nextCode++;
+                elt.CODE = NEXT_CODE(table);
                 elt.frequency = 0;
                 insertIntoTable(table, elt);
 #ifdef TEST_LZW
@@ -331,7 +380,26 @@ void decode(int inFile, int outFile, int bytesToWrite)
         C = newC = readC;
         if (readC == EMPTY)
         {
-            C = newC = 1<<numBits;
+            // since the table is pruned when it has 2^numBits - 1 codes,
+            // the EMPTY code can be special, in this case the escape code
+            // for a new character
+            int newChar = getBits(CHAR_BIT, inFile, &cache);
+            if (newChar == EOF) DIE("%s", "Can't read escaped char");
+            char K = newChar;
+            ArrayElement elt;
+            elt.PREF = EMPTY;
+            elt.CHAR = K;
+            elt.frequency = 1;
+            maybePruneArray(&table, &numBits);
+            insertIntoArray(table, elt);
+            PROGRESS("Assign new char %d to code %d", K, table->count);
+            fdputc(K, outFile);
+#ifdef TEST_LZW
+            logArray(logFile, table);
+#endif
+            if (++bytesWritten >= bytesToWrite) break;
+            oldC = EMPTY;
+            continue;
         }
         if (C <= EMPTY) DIE("Invalid code %d", C);
         //if (!C) fprintf(stderr, "uh oh");
@@ -381,25 +449,9 @@ void decode(int inFile, int outFile, int bytesToWrite)
 
         // sent when numBits increases
         // detect when numBits needs to increase.
-        if (table->count >= (1<<numBits) - 1)
+        if (maybePruneArray(&table, &numBits))
         {
-            // oldC is the last code sent and dealt with.
-            numBits++;
-            if (numBits > MAX_BITS)
-            {
-                //printf("\nprune\n");
-                // prune here
-                HashTable pruned = pruneTable(table);
-                //justPruned = true;
-                //printf("\nprune\n");
-                //checkTable(pruned);
-                oldC = EMPTY;
-                freeArray(table);
-                table = convertToArray(pruned);
-                freeTable(pruned);
-                numBits = minBitsToRepresent(table->count);
-            }
-            //continue;
+            oldC = EMPTY;
         }
         
     }
