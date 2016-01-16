@@ -26,8 +26,9 @@ int fdgetc(int fd)
     return character;
 }
 
-bool rdhang(int fd, void* bytes, int len)
+bool rdhang(int fd, void* bs, int len)
 {
+    char* bytes = (char*)bs;
     if (len == 0) return true;
     int lengthRead = 0;
     int totalRead = 0;
@@ -45,8 +46,9 @@ bool rdhang(int fd, void* bytes, int len)
     return len == 0; // return whether everything was read
 }
 
-int rdhangPartial(int fd, void* bytes, int len)
+int rdhangPartial(int fd, void* bs, int len)
 {
+    char* bytes = (char*)bs;
     if (len == 0) return true;
     int lengthRead = 0;
     int totalRead = 0;
