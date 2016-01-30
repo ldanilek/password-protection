@@ -74,6 +74,8 @@ Listed are a few constants you can change to trade security for speed.
 
 Still on the list of things to do:
 
+* Use password hash as seed for pseudorandomnumber generator which generates RSA keys on the fly.
+* Catch the SIGINT signal so ^C in secure password entry doesn't mess up terminal.
 * Salt the encryption so the same message is encrypted to different data
 * Archive symbolic links
 * Obscure the secret key inside the executable

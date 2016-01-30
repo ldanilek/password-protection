@@ -6,7 +6,7 @@
  */
 
 #include <stdio.h>
-#include <stdbool.h>
+#include "bitcode.h"
 
 typedef unsigned long long checktype;
 #define CHECKTYPE_FORMAT "%llu"

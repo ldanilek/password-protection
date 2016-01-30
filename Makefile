@@ -3,6 +3,9 @@ DEFS = -DENCRYPT
 # compiler to use
 CC = gcc
 
+# for clang
+# -Qunused-arguments -L/usr/local/opt/openssl/lib -I/usr/local/opt/openssl/include
+
 # flags to pass compiler
 CFLAGS = -O3 -std=c99 -Wall -Werror -I/usr/local/include $(DEFS)
 

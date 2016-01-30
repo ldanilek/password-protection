@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <string.h>
-#include <stdbool.h>
+#include "bitcode.h"
 #include "lzw.h"
 #include "encrypt.h"
 #include <sys/stat.h>

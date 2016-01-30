@@ -7,7 +7,10 @@
 
 #include <limits.h>
 #include <stdio.h>
-#include <stdbool.h>
+
+typedef char bool;
+#define true (1)
+#define false (0)
 
 // create with {0, 0}
 typedef struct bitCache {

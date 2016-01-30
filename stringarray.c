@@ -1,6 +1,6 @@
 #include "stringarray.h"
 #include <stdlib.h>
-#include <stdbool.h>
+#include "bitcode.h"
 #include <assert.h>
 #include "encrypt.h"
 

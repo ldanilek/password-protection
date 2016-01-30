@@ -68,7 +68,7 @@
 #ifndef ENCRYPT_H
 #define ENCRYPT_H
 
-#include <stdbool.h>
+#include "bitcode.h"
 #include <stdio.h>
 
 // if MAC is zero,
