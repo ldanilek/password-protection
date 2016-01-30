@@ -77,6 +77,8 @@
 // struct stat must have member st_atimespec and company
 #define MAC 1
 
+#define DEFAULT_PASSWORD "password"
+
 extern bool quiet;
 extern bool verbose;
 extern bool removeOriginal;

@@ -7,7 +7,7 @@ CC = gcc
 # -Qunused-arguments -L/usr/local/opt/openssl/lib -I/usr/local/opt/openssl/include
 
 # flags to pass compiler
-CFLAGS = -O3 -std=c99 -Wall -Werror -I/usr/local/include $(DEFS)
+CFLAGS = -ggdb3 -std=c99 -Wall -Werror -I/usr/local/include $(DEFS)
 
 # name for executable
 EXE = encrypt
@@ -21,7 +21,7 @@ C_SRCS = encrypt.c far.c bitcode.c stringtable.c stringarray.c lzw.c crc.c
 C_HDRS = encrypt.h far.h stringarray.h stringtable.h lzw.h bitcode.h crc.h
 
 # space-separated list of header files
-HDRS = $(C_HDRS) keys.h rsa.h
+HDRS = $(C_HDRS) rsa.h
 
 # space-separated list of source files
 SRCS = $(C_SRCS) rsa.c

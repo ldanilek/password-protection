@@ -62,7 +62,7 @@ while not isPrime(q, assurance):
     q = random.getrandbits(qBits)
 
 n = p * q
-# phi(n) = phi(p)*phi(q) = (p-1)(q-1) = pq-p-q+1
+
 totientN = n - p - q + 1
 
 writeDefinitions("N", n)
@@ -73,7 +73,7 @@ writeDefinitions("N", n)
 maxE = min(2**16, totientN-1)
 e = random.randint(5, maxE)
 while not isPrime(e, assurance):
-    e = random.randint(2, maxE)
+    e = random.randint(5, maxE)
 
 writeDefinitions("E", e)
 
