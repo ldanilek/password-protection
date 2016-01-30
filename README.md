@@ -79,3 +79,5 @@ Still on the list of things to do:
 * Salt the encryption so the same message is encrypted to different data
 * Archive symbolic links
 * Obscure the secret key inside the executable
+* Migrate away from RSA
+* Remove restriction on file sizes (currently restricted to INT_MAX)

@@ -17,12 +17,7 @@
 
 #define BYTE_GROUP (sizeof(unsigned int))
 
-// most significant digits are at the end (but each digit is stored regularly)
-typedef struct {
-    unsigned int* digits;
-    int n;
-    int capacity;
-} bigint;
+// beginning is stored at the left end of the message
 
 // salt is stored at the beginning of hash
 #define SALT_LEN (10)
@@ -106,6 +101,9 @@ void generatePublicKey(unsigned char* hash, mpz_t n, mpz_t e, mpz_t totientN)
     mpz_sub(totientN, totientN, q);
     mpz_add_ui(totientN, totientN, 1);
 
+    mpz_clear(q);
+    mpz_clear(p);
+
     // find maximum value for e
     if (mpz_cmp_ui(totientN, 1<<16) > 0)
     {
@@ -122,6 +120,7 @@ void generatePublicKey(unsigned char* hash, mpz_t n, mpz_t e, mpz_t totientN)
 
     mpz_clear(range);
     mpz_clear(min);
+    gmp_randclear(twister);
 }
 
 void generatePrivateKey(unsigned char* hash, mpz_t n, mpz_t d)
@@ -173,6 +172,7 @@ void generatePrivateKey(unsigned char* hash, mpz_t n, mpz_t d)
     mpz_clear(quotient);
     mpz_clear(oldD);
     mpz_clear(r);
+    mpz_clear(totientN);
     mpz_clear(oldR);
 }
 
@@ -264,34 +264,6 @@ void hashPassword(char* password, unsigned char* hash, mpz_t n, unsigned int* e)
     mpz_clear(totientN);
     mpz_clear(eBig);
 }
-/*
-void printDigits(char* name, bigint num)
-{
-    if (!verbose) return;
-    printf("%s: ", name);
-    for (int i = 0; i < num.n; i++)
-    {
-        printf("%u, ", num.digits[i]);
-    }
-    printf("\n");
-}
-*/
-void normalize(bigint* num)
-{
-    while (num->n > 1 && num->digits[num->n - 1] == 0) num->n--;
-}
-
-// must have set the capacity of the number and digits must be on the heap
-void appendDigit(bigint* n, unsigned int digit)
-{
-    static int usize = sizeof(unsigned int);
-    if (++n->n > n->capacity)
-    {
-        n->capacity *= 2;
-        n->digits = realloc(n->digits, usize * n->capacity);
-    }
-    n->digits[n->n - 1] = digit;
-}
 
 // reads from file one byte at a time until message is > goal
 void makeMessage(mpz_t message, int inFile, mpz_t goal, int* totalBytes,\
@@ -325,72 +297,19 @@ void makeMessage(mpz_t message, int inFile, mpz_t goal, int* totalBytes,\
     mpz_clear(charInBase);
 }
 
-void convertBigint(mpz_t result, bigint a)
-{
-    mpz_init_set_ui(result, 0);
-    mpz_t base;
-    mpz_init_set_ui(base, UINT_MAX);
-    mpz_add_ui(base, base, 1); // INT_MAX+1 is the base of these numbers
-    mpz_t place;
-    mpz_init_set_ui(place, 1); // first is the ones place
-    for (int i = 0; i < a.n; i++)
-    {
-        mpz_t thisPlace;
-        mpz_init_set_ui(thisPlace, a.digits[i]);
-        mpz_mul(thisPlace, thisPlace, place);
-        mpz_add(result, result, thisPlace);
-        mpz_mul(place, place, base);
-        mpz_clear(thisPlace);
-    }
-    mpz_clear(place);
-    mpz_clear(base);
-}
-
-bigint convertMPZ(mpz_t a)
-{
-    mpz_t base;
-    mpz_init_set_ui(base, UINT_MAX);
-    mpz_add_ui(base, base, 1); // INT_MAX+1 is the base of these numbers
-    bigint b;
-    b.digits = malloc(sizeof(unsigned int));
-    b.n = 0;
-    b.capacity = 1;
-
-    mpz_t digit;
-    mpz_init(digit);
-    while (mpz_sgn(a) > 0)
-    {
-        mpz_tdiv_qr(a, digit, a, base);
-        appendDigit(&b, mpz_get_ui(digit));
-    }
-    mpz_clear(digit);
-    mpz_clear(base);
-
-    return b;
-}
-
 // computes b^e mod n
-void bigModularExponential(mpz_t rop, bigint b, mpz_t e, mpz_t n)
+void bigModularExponential(mpz_t rop, mpz_t base, mpz_t e, mpz_t n)
 {
-    mpz_t base;
-    convertBigint(base, b);
     mpz_init(rop);
     mpz_powm(rop, base, e, n); // this is where the magic happens
-
-    mpz_clear(base);
 }
 
 // computes b^e mod n
-bigint modularExponential(mpz_t base, unsigned int e, mpz_t n)
+void modularExponential(mpz_t rop, mpz_t base, unsigned int e, mpz_t n)
 {
     unsigned long int exp = e;
-    mpz_t rop;
     mpz_init(rop);
     mpz_powm_ui(rop, base, exp, n); // this is where the magic happens
-
-    bigint result = convertMPZ(rop);
-    mpz_clear(rop);
-    return result;
 }
 
 #define MESSAGE_PROGRESS_GROUPS (30)
@@ -431,25 +350,31 @@ void encryptRSA(char* password, int inFile, int outFile)
         makeMessage(m, inFile, minMessage, &readLen, &reachedEOF);
         //PROGRESS("%s", "Encrypting message");
         //printDigits("to encrypt", m);
-        bigint c = modularExponential(m, e, n);
+        mpz_t c;
+        modularExponential(c, m, e, n);
         mpz_clear(m);
+        int writeLen = mpz_sizeinbase(c, 2) / CHAR_BIT + 1;
         //PROGRESS("%s", "Writing encrypted message");
-        int writeLen = c.n;
+        //int writeLen = c.n;
         if (write(outFile, &writeLen, sizeof(writeLen))<sizeof(writeLen))
             SYS_DIE("write");
         totalWritten += sizeof(writeLen);
         if (write(outFile, &readLen, sizeof(readLen))<sizeof(readLen))
             SYS_DIE("write");
         totalWritten += sizeof(readLen);
-        unsigned int dig;
+        unsigned char dig;
+        mpz_t digitBig;
+        mpz_init(digitBig);
         for (int i = 0; i < writeLen; i++)
         {
-            dig = c.digits[i];
+            mpz_tdiv_qr_ui(c, digitBig, c, 1<<CHAR_BIT);
+            dig = mpz_get_ui(digitBig);
             if (write(outFile, &dig, sizeof(dig))<sizeof(dig)) SYS_DIE("write");
         }
+        mpz_clear(digitBig);
         totalWritten += sizeof(dig)*writeLen;
         partialProgress += readLen;
-        free(c.digits);
+        mpz_clear(c);
     }
     mpz_clear(n);
     mpz_clear(minMessage);
@@ -487,19 +412,30 @@ void decryptRSA(char* password, int inFile, int outFile)
         if (!rdhang(inFile, &writeLen, sizeof(writeLen)))
             DIE("%s","corrupt");
         partialProgress += sizeof(writeLen);
-        bigint c;
-        c.n = readLen;
-        int usize = sizeof(unsigned int);
-        c.digits = calloc(readLen, usize);
+        mpz_t c, base, charInBase;
+        mpz_init_set_ui(c, 0);
+        mpz_init_set_ui(base, 1);
+        mpz_init(charInBase);
         for (int i = 0; i < readLen; i++)
         {
-            if (!rdhang(inFile, c.digits+i, usize)) DIE("%s","corrupt");
+            int character;
+            if ((character = fdgetc(inFile)) == EOF)
+            {
+                DIE("%s", "corrupt");
+            }
+            mpz_mul_ui(charInBase, base, character);
+
+            mpz_mul_ui(base, base, 1<<CHAR_BIT);
+            // add this character
+            mpz_add(c, c, charInBase);
         }
-        partialProgress += usize * readLen;
+        mpz_clear(charInBase);
+        mpz_clear(base);
+        partialProgress += readLen;
         //PROGRESS("%s", "Decrypting cyphertext");
         mpz_t m;
         bigModularExponential(m, c, d, n);
-        free(c.digits);
+        mpz_clear(c);
         //printDigits("decrypted", m);
         //PROGRESS("%s", "Writing decrypted message");
         mpz_t character;
@@ -511,6 +447,7 @@ void decryptRSA(char* password, int inFile, int outFile)
             fdputc(byte, outFile);
         }
         mpz_clear(character);
+        mpz_clear(m);
         bytesWritten += writeLen;
     }
     mpz_clear(n);
@@ -519,7 +456,7 @@ void decryptRSA(char* password, int inFile, int outFile)
     double bytesReadDouble = partialProgress;
     char* writeUnits = byteCount(&bytesWrittenDouble);
     char* readUnits = byteCount(&bytesReadDouble);
-    STATUS("Decrypted %g%s to yield %g%s", bytesReadDouble, readUnits,
+    STATUS("Decrypted %g%s to yield %g%s", bytesReadDouble, readUnits, \
         bytesWrittenDouble, writeUnits);
 }
 
