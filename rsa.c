@@ -21,29 +21,26 @@
 
 // salt is stored at the beginning of hash
 #define SALT_LEN (10)
-#define HASH_LEN (SALT_LEN+SHA_DIGEST_LENGTH)
+#define DIGEST_LENGTH (SHA512_DIGEST_LENGTH) // change depending on algorithm
+#define HASH_LEN (SALT_LEN+DIGEST_LENGTH)
 
 // compares n bytes, ignoring null terminators
 bool arraysAreEqual(unsigned char* one, unsigned char* two, int n)
 {
-    while (n > 0)
+    unsigned char diff;
+    for (int i = 0; i < n; i++)
     {
-        if (*one != *two)
-        {
-            return false;
-        }
-        one++;
-        two++;
-        n--;
+        diff |= one[i] ^ two[i];
     }
-    return true;
+    return diff == 0;
 }
 
+// large enough to protect against everything but Shor's algorithm
 #define MIN_KEY_BITS (1000)
 #define MAX_KEY_BITS (1200)
 
 // seeds a pseudorandom number generator
-// with the hash of length SHA_DIGEST_LENGTH
+// with the hash of length DIGEST_LENGTH
 void seedPRNG(unsigned char* hash, gmp_randstate_t prng)
 {
     gmp_randinit_mt(prng);
@@ -51,7 +48,7 @@ void seedPRNG(unsigned char* hash, gmp_randstate_t prng)
     // generate seed as mpz_t from unsigned char*
     mpz_t seed;
     mpz_init_set_ui(seed, 0);
-    for (int i = 0; i < SHA_DIGEST_LENGTH; i++)
+    for (int i = 0; i < DIGEST_LENGTH; i++)
     {
         // make room for the new bits
         mpz_mul_ui(seed, seed, 1<<CHAR_BIT);
@@ -63,7 +60,7 @@ void seedPRNG(unsigned char* hash, gmp_randstate_t prng)
 }
 
 // generates RSA public keys N and E
-// given hash of SHA_DIGEST_LENGTH characters as seed for PRNG
+// given hash of DIGEST_LENGTH characters as seed for PRNG
 // input mpz_t's don't need to be initialized. should be cleared after use
 void generatePublicKey(unsigned char* hash, mpz_t n, mpz_t e, mpz_t totientN)
 {
@@ -185,7 +182,7 @@ void checkPassword(char* password, unsigned char* hash, mpz_t n, mpz_t d)
     if (useDefault) password = DEFAULT_PASSWORD;
     // password is null-terminated
     int passwordLength = strlen(password);
-    // hash is HASH_LEN == SALT_LEN+SHA_DIGEST_LENGTH characters long
+    // hash is HASH_LEN == SALT_LEN+DIGEST_LENGTH characters long
 
     unsigned char saltedPassword[SALT_LEN+passwordLength];
     for (int i = 0; i < SALT_LEN; i++)
@@ -197,11 +194,11 @@ void checkPassword(char* password, unsigned char* hash, mpz_t n, mpz_t d)
         saltedPassword[i + SALT_LEN] = password[i];
     }
 
-    unsigned char passwordHash[SHA_DIGEST_LENGTH];
+    unsigned char passwordHash[DIGEST_LENGTH];
 
-    SHA1(saltedPassword, SALT_LEN+passwordLength, passwordHash);
+    SHA512(saltedPassword, SALT_LEN+passwordLength, passwordHash);
 
-    if (!arraysAreEqual(passwordHash, hash + SALT_LEN, SHA_DIGEST_LENGTH))
+    if (!arraysAreEqual(passwordHash, hash + SALT_LEN, DIGEST_LENGTH))
     {
         DIE("%s", "Wrong Password");
     }
@@ -248,7 +245,7 @@ void hashPassword(char* password, unsigned char* hash, mpz_t n, unsigned int* e)
 
     // performs hash of salted password, which has SALT_LEN+passwordLength chars
     // and places the result in hash, starting after the salt.
-    SHA1(saltedPassword, SALT_LEN+passwordLength, hash + SALT_LEN);
+    SHA512(saltedPassword, SALT_LEN+passwordLength, hash + SALT_LEN);
 
     PROGRESS("%s", "Generating public RSA keys");
 

@@ -50,9 +50,6 @@ lzwdecompress: lzwcompress
 decrypt: $(EXE)
 	ln -f $(EXE) decrypt
 
-keys:
-	python keygenerator.py
-
 link: encrypt decrypt
 	cp encrypt /usr/local/bin/encrypt
 	cp decrypt /usr/local/bin/decrypt
@@ -65,8 +62,7 @@ openssl:
 	brew install openssl
 	brew link openssl --force
 
-install: keys link
-	rm -f keys.h
+install: link
 
 # dependencies 
 $(OBJS): $(HDRS) Makefile

@@ -23,12 +23,8 @@ If your machine runs linux, you may need to replace the ```#define MAC 1``` in e
 
 If you can [install GMP](https://gmplib.org) (```make gmp```) and Openssl (```make openssl```), please do so. If you cannot, skip to the Compression-only section below.
 
-If you only want to install on one computer, simply run ```make install```. Otherwise, follow these instructions:
-
-1. In the command line, run ```make keys```. This will personalize your encryption system by writing random RSA keys to the keys.h file.
-2. Run ```make``` - repeat with the same keys.h on all computers for which you want to encrypt or decrypt.
-3. Encrypt or remove the file keys.h, and run ```make clean``` - this is critical for security
-4. Optional: move encrypt and decrypt to a directory in your $PATH variable (done automatically by ```make link``` or ```make install```)
+1. Run ```make```.
+2. Optional: move encrypt and decrypt to a directory in your $PATH variable (done automatically by ```make link``` or ```make install```)
 
 ## Everyday Use
 
@@ -57,7 +53,6 @@ See encrypt.h for description of flags and restrictions. In compression-only mod
 
 Security of this program is based on the following assumptions:
 
-* Decompiling a C executable to discover #define'd numerical literals (the RSA keys) is hard
 * SHA1 hashing is non-invertible
 * RSA encryption isn't invertible without the keys
 

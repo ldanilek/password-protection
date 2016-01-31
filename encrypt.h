@@ -59,10 +59,6 @@
  * Create ArchiveName by running RSA encryption
  *     metadata: hash of password string and salt using the SHA1 hash function
  *
- * All RSA keys are hard-coded into the source code of rsa.c, so to maintain
- * security you should compile, then encrypt the source file keys.h
- * If portability isn't a problem, you can remove keys.h after compiling,
- * and run make clean to remove rsa.o
  */
 
 #ifndef ENCRYPT_H
