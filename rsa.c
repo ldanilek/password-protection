@@ -15,8 +15,6 @@
 //#define PMPZ(num) mpz_out_str(stdout,10,(num))
 //#define PROG_MPZ(name,num) if(verbose)printf(name ": "),PMPZ(num),printf("\n")
 
-#define BYTE_GROUP (sizeof(unsigned int))
-
 // beginning is stored at the left end of the message
 
 // salt is stored at the beginning of hash
@@ -126,17 +124,6 @@ void generatePrivateKey(unsigned char* hash, mpz_t n, mpz_t d)
     generatePublicKey(hash, n, oldR, totientN);
     mpz_init_set(r, totientN);
     // calculate bezout coefficient of e and totientN
-    /*
-    d = 0
-    old_d = 1
-    r = totientN
-    old_r = e
-    while r != 0:
-        quotient = old_r / r
-        old_r, r = r, old_r - quotient * r
-        old_s, s = s, old_s - quotient * s
-    return old_s
-    */
     mpz_t temp;
     mpz_init(temp);
     mpz_t quotient;
@@ -392,10 +379,6 @@ void decryptRSA(char* password, int inFile, int outFile)
     if (!rdhang(inFile, hash, HASH_LEN)) DIE("%s", "EOF at start");
     mpz_t n, d;
     checkPassword(password, hash, n, d);
-
-    //mpz_t n, d;
-    //getN(n);
-    //getD(d);
 
     int partialProgress = HASH_LEN;
     int bytesWritten = 0;

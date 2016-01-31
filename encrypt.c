@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+#include <signal.h>
 
 #define PASSWORD_PROMPT "Input password: "
 
@@ -264,6 +265,24 @@ void showHelpInfo(bool decrypt)
     exit(0);
 }
 
+FILE* passread = NULL;
+
+// catch signals
+static void catchSignal(int signo) {
+    if (passread)
+    {
+        // turn ECHO back on.
+        struct termios TermConf;
+        if (tcgetattr(fileno(passread), &TermConf)) SYS_ERROR("tcgetattr");
+        TermConf.c_lflag |= ECHO;
+        if (tcsetattr(fileno(passread), TCSANOW, &TermConf))
+            SYS_ERROR("tcsetattr");
+    }
+    signal(signo, SIG_DFL);
+    raise(signo);
+}
+
+
 int main(int argc, char** argv)
 {
     // find which program to run
@@ -313,12 +332,22 @@ int main(int argc, char** argv)
     {
         // terminal input
         FILE* devtty = fopen("/dev/tty", "r");
-        FILE* passread = devtty ? devtty : stdin;
+        passread = devtty ? devtty : stdin;
 
         struct termios TermConf;
         if (tcgetattr(fileno(passread), &TermConf)) SYS_ERROR("tcgetattr");
         if (!showPassword)
         {
+            // in the event of any signal, want to restore terminal input
+            if (signal(SIGINT, catchSignal) == SIG_ERR ||\
+                signal(SIGABRT, catchSignal) == SIG_ERR ||\
+                signal(SIGILL, catchSignal) == SIG_ERR ||\
+                signal(SIGSEGV, catchSignal) == SIG_ERR ||\
+                signal(SIGTERM, catchSignal) == SIG_ERR ||\
+                signal(SIGFPE, catchSignal) == SIG_ERR)
+            {
+                DIE("%s", "An error occurred while setting a signal handler");
+            }
             TermConf.c_lflag &= ~ECHO;
             if (tcsetattr(fileno(passread), TCSANOW, &TermConf))
                 SYS_ERROR("tcsetattr");
@@ -350,6 +379,8 @@ int main(int argc, char** argv)
             fprintf(writetty ? writetty : stdout, "\n");
             if (writetty && fclose(writetty)) SYS_ERROR("fclose");
         }
+
+        passread = NULL;
 
         if (devtty && fclose(devtty)) SYS_ERROR("fclose");
         password[count] = '\0';

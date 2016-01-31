@@ -60,8 +60,7 @@ Security of this program is based on the following assumptions:
 
 Listed are a few constants you can change to trade security for speed.
 
-* pBits and qBits in keygenerator.py, which will change the length of the RSA keys. Longer keys are more secure and make each step of encryption slower, but the cleartext is divided into chucks of size approximately pBits+qBits, so longer keys means fewer steps of encryption.
-* assurance in keygenerator.py, which will change the probablility that p and q are prime (necessary for RSA to be secure)
+* MIN_KEY_BITS and MAX_KEY_BITS in rsa.c, which will change the length of the RSA keys. Longer keys are more secure and make each step of encryption slower, but the cleartext is divided into chucks of size approximately pBits+qBits, so longer keys means fewer steps of encryption.
 * SALT_LEN in rsa.c will change the length of the password salt
 * MAX_BITS in lzw.c will change the maximum size of the prefix table, which will affect compression factors
 
@@ -69,9 +68,6 @@ Listed are a few constants you can change to trade security for speed.
 
 Still on the list of things to do:
 
-* Use password hash as seed for pseudorandomnumber generator which generates RSA keys on the fly.
-* Catch the SIGINT signal so ^C in secure password entry doesn't mess up terminal.
-* Salt the encryption so the same message is encrypted to different data
 * Archive symbolic links
 * Obscure the secret key inside the executable
 * Migrate away from RSA
