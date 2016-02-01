@@ -23,6 +23,8 @@
 #define HASH_LEN (SALT_LEN+DIGEST_LENGTH)
 
 // compares n bytes, ignoring null terminators
+// uses constant-time comparison
+// (not that it matters since the hash value is easily attainable anyway)
 bool arraysAreEqual(unsigned char* one, unsigned char* two, int n)
 {
     unsigned char diff;
@@ -249,8 +251,9 @@ void hashPassword(char* password, unsigned char* hash, mpz_t n, unsigned int* e)
     mpz_clear(eBig);
 }
 
-// reads from file one byte at a time until message is > goal
-void makeMessage(mpz_t message, int inFile, mpz_t goal, int* totalBytes,\
+// reads from file one byte at a time until message is > goal. returns the last
+// which was <= goal
+void makeMessage(mpz_t message, int inFile, int maxBytes, int* totalBytes,\
     bool* reachedEOF)
 {
     // for making message backwards
@@ -259,9 +262,11 @@ void makeMessage(mpz_t message, int inFile, mpz_t goal, int* totalBytes,\
     mpz_init(charInBase);
 
     mpz_init_set_ui(message, 0);
+    int bytesRead = 0;
     int c;
     while ((c = fdgetc(inFile)) != EOF)
     {
+        bytesRead++;
         (*totalBytes)++;
         // make room for this character
         mpz_mul_ui(charInBase, base, c);
@@ -269,7 +274,7 @@ void makeMessage(mpz_t message, int inFile, mpz_t goal, int* totalBytes,\
         mpz_mul_ui(base, base, 1<<CHAR_BIT);
         // add this character
         mpz_add(message, message, charInBase);
-        if (mpz_cmp(message, goal) > 0)
+        if (bytesRead >= maxBytes)
         {
             mpz_clear(base);
             mpz_clear(charInBase);
@@ -311,9 +316,9 @@ void encryptRSA(char* password, int inFile, int outFile)
     if (write(outFile, hash, HASH_LEN) < HASH_LEN) SYS_DIE("write");
     int totalWritten = HASH_LEN;
 
-    mpz_t minMessage;
-    mpz_init(minMessage);
-    mpz_tdiv_q_ui(minMessage, n, 1<<(3*CHAR_BIT));
+    // how many bytes can fit in a message? it must be smaller than size of n
+    int maxBytes = mpz_sizeinbase(n, 2) / CHAR_BIT - 2;
+
     /*
     mpz_t n;
     getN(n);
@@ -331,11 +336,20 @@ void encryptRSA(char* password, int inFile, int outFile)
         int readLen = 0;
         //PROGRESS("%s", "Fetching message");
         mpz_t m;
-        makeMessage(m, inFile, minMessage, &readLen, &reachedEOF);
+        makeMessage(m, inFile, maxBytes, &readLen, &reachedEOF);
+
         //PROGRESS("%s", "Encrypting message");
         //printDigits("to encrypt", m);
         mpz_t c;
         modularExponential(c, m, e, n);
+/*
+        fprintf(stdout, "message is ");
+        mpz_out_str(stdout, 10, m);
+        fprintf(stdout, "\nciphertext is ");
+        mpz_out_str(stdout, 10, c);
+        fprintf(stdout, "\n");
+        fflush(stdout);
+*/
         mpz_clear(m);
         int writeLen = mpz_sizeinbase(c, 2) / CHAR_BIT + 1;
         //PROGRESS("%s", "Writing encrypted message");
@@ -361,7 +375,6 @@ void encryptRSA(char* password, int inFile, int outFile)
         mpz_clear(c);
     }
     mpz_clear(n);
-    mpz_clear(minMessage);
     double bytesWrittenDouble = totalWritten;
     double bytesReadDouble = partialProgress;
     char* writeUnits = byteCount(&bytesWrittenDouble);
@@ -379,7 +392,6 @@ void decryptRSA(char* password, int inFile, int outFile)
     if (!rdhang(inFile, hash, HASH_LEN)) DIE("%s", "EOF at start");
     mpz_t n, d;
     checkPassword(password, hash, n, d);
-
     int partialProgress = HASH_LEN;
     int bytesWritten = 0;
     //int lastPercent = -1;
@@ -396,6 +408,7 @@ void decryptRSA(char* password, int inFile, int outFile)
         mpz_init_set_ui(c, 0);
         mpz_init_set_ui(base, 1);
         mpz_init(charInBase);
+        
         for (int i = 0; i < readLen; i++)
         {
             int character;
@@ -409,13 +422,23 @@ void decryptRSA(char* password, int inFile, int outFile)
             // add this character
             mpz_add(c, c, charInBase);
         }
+        
         mpz_clear(charInBase);
         mpz_clear(base);
         partialProgress += readLen;
         //PROGRESS("%s", "Decrypting cyphertext");
         mpz_t m;
         bigModularExponential(m, c, d, n);
+/*
+        fprintf(stdout, "message is ");
+        mpz_out_str(stdout, 10, m);
+        fprintf(stdout, "\nciphertext is ");
+        mpz_out_str(stdout, 10, c);
+        fprintf(stdout, "\n");
+        fflush(stdout);
+*/
         mpz_clear(c);
+
         //printDigits("decrypted", m);
         //PROGRESS("%s", "Writing decrypted message");
         mpz_t character;
