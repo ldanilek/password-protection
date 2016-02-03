@@ -12,6 +12,8 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
+//#define ACTUALLY_RSA
+
 //#define PMPZ(num) mpz_out_str(stdout,10,(num))
 //#define PROG_MPZ(name,num) if(verbose)printf(name ": "),PMPZ(num),printf("\n")
 
@@ -39,6 +41,8 @@ bool arraysAreEqual(unsigned char* one, unsigned char* two, int n)
 #define MIN_KEY_BITS (1000)
 #define MAX_KEY_BITS (1200)
 
+#define SHUFFLE (10) // change this to personalize encryption
+
 // seeds a pseudorandom number generator
 // with the hash of length DIGEST_LENGTH
 void seedPRNG(unsigned char* hash, gmp_randstate_t prng)
@@ -56,8 +60,15 @@ void seedPRNG(unsigned char* hash, gmp_randstate_t prng)
         mpz_add_ui(seed, seed, hash[i]);
     }
     gmp_randseed(prng, seed);
+    mpz_t toshuffle;
+    mpz_init(toshuffle);
+    // shuffle it up a bit.
+    for (int i = 0; i < SHUFFLE; i++) mpz_urandomm(toshuffle, prng, seed);
+    mpz_clear(toshuffle);
     mpz_clear(seed);
 }
+
+#ifdef ACTUALLY_RSA
 
 // generates RSA public keys N and E
 // given hash of DIGEST_LENGTH characters as seed for PRNG
@@ -162,10 +173,15 @@ void generatePrivateKey(unsigned char* hash, mpz_t n, mpz_t d)
     mpz_clear(oldR);
 }
 
+#endif
+
 // if password doesn't match hash, program dies
-// returns hash as an int
 // input (uninitialized) variables for private keys
+#ifdef ACTUALLY_RSA
 void checkPassword(char* password, unsigned char* hash, mpz_t n, mpz_t d)
+#else
+void checkPassword(char* password, unsigned char* hash, gmp_randstate_t prng)
+#endif
 {
     bool useDefault = !password;
     if (useDefault) password = DEFAULT_PASSWORD;
@@ -198,8 +214,12 @@ void checkPassword(char* password, unsigned char* hash, mpz_t n, mpz_t d)
             for (int i = 0; i < passwordLength; i++) password[i] = '\0';
         PROGRESS("%s", "Password correct");
     }
+#ifdef ACTUALLY_RSA
     PROGRESS("%s", "Generating private RSA keys");
     generatePrivateKey(passwordHash, n, d);
+#else
+    seedPRNG(passwordHash, prng);
+#endif
     /*
     fprintf(stderr, "n: ");
     mpz_out_str(stderr, 10, n);
@@ -213,7 +233,11 @@ void checkPassword(char* password, unsigned char* hash, mpz_t n, mpz_t d)
 // pass in NULL-terminated password
 // and array of length HASH_LEN to put the hash
 // input (uninitialized) variables for public keys
+#ifdef ACTUALLY_RSA
 void hashPassword(char* password, unsigned char* hash, mpz_t n, unsigned int* e)
+#else
+void hashPassword(char* password, unsigned char* hash, gmp_randstate_t prng)
+#endif
 {
     PROGRESS("%s", "Generating password hash");
     bool useDefault = !password;
@@ -236,8 +260,8 @@ void hashPassword(char* password, unsigned char* hash, mpz_t n, unsigned int* e)
     // and places the result in hash, starting after the salt.
     SHA512(saltedPassword, SALT_LEN+passwordLength, hash + SALT_LEN);
 
+#ifdef ACTUALLY_RSA
     PROGRESS("%s", "Generating public RSA keys");
-
     mpz_t totientN, eBig;
     generatePublicKey(hash + SALT_LEN, n, eBig, totientN);
     *e = (unsigned int)mpz_get_ui(eBig);
@@ -249,6 +273,9 @@ void hashPassword(char* password, unsigned char* hash, mpz_t n, unsigned int* e)
     */
     mpz_clear(totientN);
     mpz_clear(eBig);
+#else
+    seedPRNG(hash + SALT_LEN, prng);
+#endif
 }
 
 // reads from file one byte at a time until message is > goal. returns the last
@@ -286,6 +313,8 @@ void makeMessage(mpz_t message, int inFile, int maxBytes, int* totalBytes,\
     mpz_clear(charInBase);
 }
 
+#ifdef ACTUALLY_RSA
+
 // computes b^e mod n
 void bigModularExponential(mpz_t rop, mpz_t base, mpz_t e, mpz_t n)
 {
@@ -301,7 +330,30 @@ void modularExponential(mpz_t rop, mpz_t base, unsigned int e, mpz_t n)
     mpz_powm_ui(rop, base, exp, n); // this is where the magic happens
 }
 
-#define MESSAGE_PROGRESS_GROUPS (30)
+#else
+
+void generateOTP(gmp_randstate_t prng, mpz_t otp, unsigned int numBits)
+{
+    mpz_t range;
+    mpz_init_set_ui(range, 2);
+    mpz_pow_ui(range, range, numBits+1);
+    mpz_t min;
+    mpz_init_set_ui(min, 2);
+    mpz_pow_ui(min, min, numBits);
+    mpz_sub(range, range, min);
+    mpz_init(otp);
+    mpz_urandomm(otp, prng, range);
+    mpz_add(otp, min, otp);
+    mpz_clear(range);
+    mpz_clear(min);
+    //PROGRESS("Generating One-time Pad with %u bits", numBits);
+}
+
+#endif
+
+// if this is too big it basically becomes non-parallel execution
+// and maybe the PRNG becomes really slow?
+#define MAX_MESSAGE_BYTES (500)
 
 // c = m^e mod n will convert message m into ciphertext c
 void encryptRSA(char* password, int inFile, int outFile)
@@ -310,14 +362,19 @@ void encryptRSA(char* password, int inFile, int outFile)
     STATUS("%s", "Encrypting");
     
     unsigned char hash[HASH_LEN];
+#ifdef ACTUALLY_RSA
     mpz_t n;
     unsigned int e;
     hashPassword(password, hash, n, &e);
-    if (write(outFile, hash, HASH_LEN) < HASH_LEN) SYS_DIE("write");
-    int totalWritten = HASH_LEN;
-
     // how many bytes can fit in a message? it must be smaller than size of n
     int maxBytes = mpz_sizeinbase(n, 2) / CHAR_BIT - 2;
+#else
+    gmp_randstate_t prng;
+    hashPassword(password, hash, prng);
+    int maxBytes = MAX_MESSAGE_BYTES;
+#endif
+    if (write(outFile, hash, HASH_LEN) < HASH_LEN) SYS_DIE("write");
+    int totalWritten = HASH_LEN;
 
     /*
     mpz_t n;
@@ -341,7 +398,18 @@ void encryptRSA(char* password, int inFile, int outFile)
         //PROGRESS("%s", "Encrypting message");
         //printDigits("to encrypt", m);
         mpz_t c;
+#ifdef ACTUALLY_RSA
         modularExponential(c, m, e, n);
+#else
+        unsigned int numBits = readLen * CHAR_BIT;
+        mpz_init(c);
+        mpz_t otp;
+        generateOTP(prng, otp, numBits);
+        //unsigned int otpLen = mpz_sizeinbase(otp, 2);
+        //unsigned int mLen = mpz_sizeinbase(m, 2);
+        mpz_xor(c, m, otp);
+        mpz_clear(otp);
+#endif
 /*
         fprintf(stdout, "message is ");
         mpz_out_str(stdout, 10, m);
@@ -374,7 +442,11 @@ void encryptRSA(char* password, int inFile, int outFile)
         partialProgress += readLen;
         mpz_clear(c);
     }
+#ifdef ACTUALLY_RSA
     mpz_clear(n);
+#else
+    gmp_randclear(prng);
+#endif
     double bytesWrittenDouble = totalWritten;
     double bytesReadDouble = partialProgress;
     char* writeUnits = byteCount(&bytesWrittenDouble);
@@ -390,8 +462,13 @@ void decryptRSA(char* password, int inFile, int outFile)
 
     unsigned char hash[HASH_LEN];
     if (!rdhang(inFile, hash, HASH_LEN)) DIE("%s", "EOF at start");
+#ifdef ACTUALLY_RSA
     mpz_t n, d;
     checkPassword(password, hash, n, d);
+#else
+    gmp_randstate_t prng;
+    checkPassword(password, hash, prng);
+#endif
     int partialProgress = HASH_LEN;
     int bytesWritten = 0;
     //int lastPercent = -1;
@@ -428,7 +505,16 @@ void decryptRSA(char* password, int inFile, int outFile)
         partialProgress += readLen;
         //PROGRESS("%s", "Decrypting cyphertext");
         mpz_t m;
+#ifdef ACTUALLY_RSA
         bigModularExponential(m, c, d, n);
+#else
+        mpz_init(m);
+        mpz_t otp;
+        int numBits = writeLen * CHAR_BIT;
+        generateOTP(prng, otp, numBits);
+        mpz_xor(m, c, otp);
+        mpz_clear(otp);
+#endif
 /*
         fprintf(stdout, "message is ");
         mpz_out_str(stdout, 10, m);
@@ -453,8 +539,12 @@ void decryptRSA(char* password, int inFile, int outFile)
         mpz_clear(m);
         bytesWritten += writeLen;
     }
+#ifdef ACTUALLY_RSA
     mpz_clear(n);
     mpz_clear(d);
+#else
+    gmp_randclear(prng);
+#endif
     double bytesWrittenDouble = bytesWritten;
     double bytesReadDouble = partialProgress;
     char* writeUnits = byteCount(&bytesWrittenDouble);

@@ -69,5 +69,6 @@ Listed are a few constants you can change to trade security for speed.
 Still on the list of things to do:
 
 * Archive symbolic links
-* Migrate away from RSA
-* Remove restriction on file sizes (currently restricted to INT_MAX)
+* Migrate away from RSA - possibly to OTP?
+* Remove restriction on file sizes (currently restricted to INT_MAX, I think?)
+* Securely delete files on -r flag so they are not recoverable.
